@@ -63,7 +63,7 @@ template <size_t size_in_unsigned_ints> std::array<unsigned int, size_in_unsigne
 #elif defined(__APPLE__) && TARGET_OS_IPHONE
             //  using arc4random_buf on iOS
             arc4random_buf(current_offset, BYTES_PER_GETENTROPY_READ);
-            ssize_t read_bytes = BYTES_PER_GETENTROPY_READ
+            ssize_t read_bytes = BYTES_PER_GETENTROPY_READ;
 #else
             // Sample from urandom on native
             auto read_bytes = getrandom(current_offset, bytes_left, 0);

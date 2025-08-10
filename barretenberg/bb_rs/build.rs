@@ -287,8 +287,11 @@ fn main() {
         .allowlist_function("acir_serialize_proof_into_fields")
         .allowlist_function("acir_serialize_verification_key_into_fields")
         .allowlist_function("acir_prove_ultra_honk")
+        .allowlist_function("acir_prove_ultra_keccak_honk")
         .allowlist_function("acir_verify_ultra_honk")
+        .allowlist_function("acir_verify_ultra_keccak_honk")
         .allowlist_function("acir_write_vk_ultra_honk")
+        .allowlist_function("acir_write_vk_ultra_keccak_honk")
         .allowlist_function("acir_prove_and_verify_ultra_honk")
         .allowlist_function("acir_proof_as_fields_ultra_honk")
         // Tell cargo to invalidate the built crate whenever any of the included header files changed.
