@@ -3,7 +3,7 @@ name: Publish Barretenberg Mobile
 on:
   push:
     tags:
-      - "v*"
+      - "[0-9]+.[0-9]+.[0-9]+*"
   workflow_dispatch:
     # Allow pushing a manual nightly release
     inputs:
@@ -45,6 +45,11 @@ jobs:
           - label: x86_64-apple-ios
             runner: macos-13
             platform: ios
+            optional: false
+          # macOS desktop targets
+          - label: aarch64-apple-darwin
+            runner: macos-14
+            platform: macos
             optional: false
           # Android targets
           - label: x86_64-linux-android
@@ -101,6 +106,14 @@ jobs:
           source $HOME/.cargo/env
           IPHONEOS_DEPLOYMENT_TARGET=15.0 cargo build -vvvv --target ${{ matrix.label }} --release
 
+      - name: Build Rust Library for macOS
+        if: matrix.platform == 'macos'
+        working-directory: barretenberg/bb_rs
+        continue-on-error: ${{ matrix.optional }}
+        run: |
+          source $HOME/.cargo/env
+          cargo build -vvvv --target ${{ matrix.label }} --release
+
       - name: Build Rust Library for Android
         if: matrix.platform == 'android'
         working-directory: barretenberg/bb_rs
@@ -114,36 +127,54 @@ jobs:
         working-directory: barretenberg/bb_rs
         continue-on-error: ${{ matrix.optional }}
         run: |
-          mkdir -p dist/lib
+          mkdir -p dist/${{ matrix.label }}/lib
           # Find the build directory (it has a hash in the name)
           BUILD_DIR=$(find target/${{ matrix.label }}/release/build -name "bb_rs-*" -type d | head -1)
-          
+
           # Copy the C++ static library (libbarretenberg.a) into lib directory
-          cp $BUILD_DIR/out/build/lib/libbarretenberg.a ./dist/lib/
-          
+          cp $BUILD_DIR/out/build/lib/libbarretenberg.a ./dist/${{ matrix.label }}/lib/
+
           # Copy all header files from the include directory
-          cp -r $BUILD_DIR/out/build/include ./dist/
-          
+          cp -r $BUILD_DIR/out/build/include ./dist/${{ matrix.label }}/
+
           # Create the tar.gz archive
-          7z a -ttar -so -an ./dist/* | 7z a -si ./bb_rs-${{ matrix.label }}.tar.gz
+          cd dist && 7z a -ttar -so -an ${{ matrix.label }} | 7z a -si ../bb_rs-${{ matrix.label }}.tar.gz
+
+      - name: Package macOS Rust Library Artifact (${{ matrix.label }})
+        if: matrix.platform == 'macos'
+        working-directory: barretenberg/bb_rs
+        continue-on-error: ${{ matrix.optional }}
+        run: |
+          mkdir -p dist/${{ matrix.label }}/lib
+          # Find the build directory (it has a hash in the name)
+          BUILD_DIR=$(find target/${{ matrix.label }}/release/build -name "bb_rs-*" -type d | head -1)
+
+          # Copy the C++ static library (libbarretenberg.a) into lib directory
+          cp $BUILD_DIR/out/build/lib/libbarretenberg.a ./dist/${{ matrix.label }}/lib/
+
+          # Copy all header files from the include directory
+          cp -r $BUILD_DIR/out/build/include ./dist/${{ matrix.label }}/
+
+          # Create the tar.gz archive
+          cd dist && 7z a -ttar -so -an ${{ matrix.label }} | 7z a -si ../bb_rs-${{ matrix.label }}.tar.gz
 
       - name: Package Android Rust Library Artifact (${{ matrix.label }})
         if: matrix.platform == 'android'
         working-directory: barretenberg/bb_rs
         continue-on-error: ${{ matrix.optional }}
         run: |
-          mkdir -p dist/lib
+          mkdir -p dist/${{ matrix.label }}/lib
           # Find the build directory (it has a hash in the name)
           BUILD_DIR=$(find target/${{ matrix.label }}/release/build -name "bb_rs-*" -type d | head -1)
-          
+
           # Copy the C++ static library (libbarretenberg.a) into lib directory
-          cp $BUILD_DIR/out/build/lib/libbarretenberg.a ./dist/lib/
-          
+          cp $BUILD_DIR/out/build/lib/libbarretenberg.a ./dist/${{ matrix.label }}/lib/
+
           # Copy all header files from the include directory
-          cp -r $BUILD_DIR/out/build/include ./dist/
-          
+          cp -r $BUILD_DIR/out/build/include ./dist/${{ matrix.label }}/
+
           # Create the tar.gz archive
-          7z a -ttar -so -an ./dist/* | 7z a -si ./bb_rs-${{ matrix.label }}.tar.gz
+          cd dist && 7z a -ttar -so -an ${{ matrix.label }} | 7z a -si ../bb_rs-${{ matrix.label }}.tar.gz
 
       - name: Upload Library Artifact (${{ matrix.label }})
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -209,6 +240,12 @@ jobs:
         with:
           name: bb_rs-x86_64-apple-ios.tar.gz
 
+      # Download macOS artifacts
+      - name: Download bb_rs artifact (aarch64-apple-darwin)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bb_rs-aarch64-apple-darwin.tar.gz
+
       # Download Android artifacts
       - name: Download bb_rs artifact (x86_64-linux-android)
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -227,8 +264,9 @@ jobs:
           tag_name: ${{ inputs.ref_name || inputs.tag || github.ref_name }}
           prerelease: true
           files: |
-            bb_rs-aarch64-apple-ios.tar.gz
+            bb_rs-aarch64-apple-darwin.tar.gz
             bb_rs-aarch64-apple-ios-sim.tar.gz
+            bb_rs-aarch64-apple-ios.tar.gz
             bb_rs-x86_64-apple-ios.tar.gz
-            bb_rs-x86_64-linux-android.tar.gz
             bb_rs-aarch64-linux-android.tar.gz
+            bb_rs-x86_64-linux-android.tar.gz
