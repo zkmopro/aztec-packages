@@ -6,9 +6,13 @@
 #include <random>
 #ifdef __APPLE__
 #include <TargetConditionals.h>
-#include <stdlib.h> // arc4random_buf
+#if TARGET_OS_OSX
+#include <sys/random.h> // getentropy for MacOS
+#elif TARGET_OS_IPHONE
+#include <stdlib.h> // arc4random_buf for iOS
+#endif
 #else
-#include <sys/random.h> // Linux
+#include <sys/random.h> // getrandom for Linux
 #endif
 
 namespace bb::numeric {
