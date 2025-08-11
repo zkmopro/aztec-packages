@@ -87,6 +87,27 @@ fn main() {
             &format!("-I{}/ndk/{}/toolchains/llvm/prebuilt/{}/sysroot/usr/include/aarch64-linux-android", android_home, ndk_version, host_tag)
         ]);
     } else if target_os == "ios" {
+        let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+        let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+        
+        // Determine if this is a simulator build (x86_64 on iOS is always simulator)
+        let target = env::var("TARGET").unwrap_or_default();
+        let is_simulator = target_arch == "x86_64" || target.contains("sim");
+        
+        let (sdk_path, platform_path, target_suffix) = if is_simulator {
+            (
+                "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk",
+                "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk",
+                "-simulator"
+            )
+        } else {
+            (
+                "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk",
+                "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk",
+                ""
+            )
+        };
+        
         builder = builder
         // Add the include path for headers.
         .clang_args([
@@ -95,8 +116,12 @@ fn main() {
             &format!("-I{}/build/include", dst.display()),
             // Dependencies' include paths needs to be added manually.
             &format!("-I{}/build/_deps/msgpack-c/src/msgpack-c/include", dst.display()),
-            "-I/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/usr/include/c++/v1",
-            "-I/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/usr/include"
+            &format!("-I{}/usr/include/c++/v1", platform_path),
+            &format!("-I{}/usr/include", platform_path),
+            // Add target-specific flags for cross-compilation
+            &format!("--target={}-apple-ios15.0{}", target_arch, target_suffix),
+            "-isysroot",
+            sdk_path
         ]);
     } else if target_os == "macos" {
         builder = builder
