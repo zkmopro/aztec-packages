@@ -168,7 +168,7 @@ void write_vk_for_ivc(const std::string& bytecode_path, const std::filesystem::p
     auto translator_vk = std::make_shared<TranslatorFlavor::VerificationKey>(ivc.goblin.get_translator_proving_key());
 
     const bool output_to_stdout = output_dir == "-";
-    const auto vk = std::make_shared<ClientIVC::VerificationKey>(ivc.honk_vk, eccvm_vk, translator_vk);
+    const auto vk = std::make_shared<ClientIVC::VerificationKey>(ClientIVC::VerificationKey{ ivc.honk_vk, eccvm_vk, translator_vk });
     const auto buf = to_buffer(vk);
 
     if (output_to_stdout) {
