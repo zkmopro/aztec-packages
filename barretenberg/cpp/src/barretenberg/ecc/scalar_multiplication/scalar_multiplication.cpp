@@ -785,7 +785,7 @@ std::vector<typename Curve::AffineElement> MSM<Curve>::batch_multi_scalar_mul(
                 std::span<const uint32_t> work_indices =
                     std::span<const uint32_t>{ &msm_scalar_indices[msm.batch_msm_index][msm.start_index], msm.size };
                 std::vector<uint64_t> point_schedule(msm.size);
-                MSMData msm_data(work_scalars, work_points, work_indices, std::span<uint64_t>(point_schedule));
+                MSMData msm_data{work_scalars, work_points, work_indices, std::span<uint64_t>(point_schedule)};
                 Element msm_result = Curve::Group::point_at_infinity;
                 constexpr size_t SINGLE_MUL_THRESHOLD = 16;
                 if (msm.size < SINGLE_MUL_THRESHOLD) {
