@@ -1,9 +1,9 @@
 # TOOD(#10775): see 'releases'. We want to move away from this and use a bootstrap-oriented flow with our nightly releases.
 name: Nightly nextnet deploy
 on:
-  schedule:
-    # Run the workflow every night at 4:00 AM UTC. After the nightly tag has been created
-    - cron: "0 4 * * *"
+  # schedule:
+  #   # Run the workflow every night at 4:00 AM UTC. After the nightly tag has been created
+  #   - cron: "0 4 * * *"
   workflow_dispatch:
 
 concurrency:

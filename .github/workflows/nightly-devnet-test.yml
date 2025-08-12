@@ -1,9 +1,9 @@
 name: Devnet network tests
 on:
   workflow_dispatch:
-  schedule:
-    # Run nightly at 0300
-    - cron: "0 3 * * *"
+  # schedule:
+  #   # Run nightly at 0300
+  #   - cron: "0 3 * * *"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

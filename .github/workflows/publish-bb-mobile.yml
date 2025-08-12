@@ -17,9 +17,9 @@ on:
         description: Whether to publish the build artifacts
         type: boolean
         default: false
-  schedule:
-    # Run a nightly release at 2 AM UTC
-    - cron: "0 2 * * *"
+  # schedule:
+  #   # Run a nightly release at 2 AM UTC
+  #   - cron: "0 2 * * *"
 
 permissions:
   # Necessary to upload new release artifacts
