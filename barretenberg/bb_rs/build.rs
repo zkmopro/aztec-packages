@@ -78,7 +78,7 @@ fn main() {
         let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
         let target = env::var("TARGET").unwrap_or_default();
         
-        let platform = if target.contains("sim") {
+        let platform = if target.contains("sim") || target.contains("x86_64-apple-ios") {
             if target_arch == "aarch64" {
                 "SIMULATORARM64"
             } else if target_arch == "x86_64" {
@@ -171,7 +171,7 @@ fn main() {
     } else if target_os == "ios" {
         // Determine the correct platform SDK based on the target
         let target = env::var("TARGET").unwrap_or_default();
-        let sdk_platform = if target.contains("sim") {
+        let sdk_platform = if target.contains("sim") || target.contains("x86_64-apple-ios") {
             "iPhoneSimulator"
         } else {
             "iPhoneOS"
