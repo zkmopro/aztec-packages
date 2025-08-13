@@ -35,11 +35,11 @@ jobs:
         include:
           # iOS targets - build C++ library directly
           - label: aarch64-apple-ios
-            runner: macos-14
+            runner: macos-latest
             platform: ios
             optional: false
           - label: aarch64-apple-ios-sim
-            runner: macos-14
+            runner: macos-latest
             platform: ios
             optional: false
           - label: x86_64-apple-ios
@@ -48,17 +48,26 @@ jobs:
             optional: false
           # macOS desktop targets
           - label: aarch64-apple-darwin
-            runner: macos-14
+            runner: macos-latest
             platform: macos
+            optional: false
+          - label: x86_64-apple-darwin
+            runner: macos-13
+            platform: macos
+            optional: false
+          # Linux desktop targets
+          - label: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            platform: linux
             optional: false
           # Android targets
           - label: x86_64-linux-android
-            runner: macos-14
+            runner: macos-latest
             platform: android
             android_abi: x86_64
             optional: false
           - label: aarch64-linux-android
-            runner: macos-14
+            runner: macos-latest
             platform: android
             android_abi: arm64-v8a
             optional: false
@@ -74,6 +83,9 @@ jobs:
           # Install Rust for iOS cross-compilation
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source $HOME/.cargo/env
+          # Add cargo bin to PATH for subsequent steps
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          # Install the iOS target
           rustup target add ${{ matrix.label }}
           echo "IPHONEOS_DEPLOYMENT_TARGET=15.0" >> $GITHUB_ENV
 
@@ -83,6 +95,9 @@ jobs:
           # Install Rust for Android cross-compilation
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source $HOME/.cargo/env
+          # Add cargo bin to PATH for subsequent steps
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          # Install the Android target
           rustup target add ${{ matrix.label }}
           # Install Android SDK and NDK via brew
           brew install --cask android-commandlinetools
@@ -98,12 +113,22 @@ jobs:
           HOST_TAG=$(ls $HOME/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt)
           echo "HOST_TAG=$HOST_TAG" >> $GITHUB_ENV
 
+      - name: Set up Linux Environment
+        if: matrix.platform == 'linux'
+        run: |
+          # Install Rust for Linux cross-compilation
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
+          # Add cargo bin to PATH for subsequent steps
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          # Install the Linux target
+          rustup target add ${{ matrix.label }}
+
       - name: Build Rust Library for iOS
         if: matrix.platform == 'ios'
         working-directory: barretenberg/bb_rs
         continue-on-error: ${{ matrix.optional }}
         run: |
-          source $HOME/.cargo/env
           IPHONEOS_DEPLOYMENT_TARGET=15.0 cargo build -vvvv --target ${{ matrix.label }} --release
 
       - name: Build Rust Library for macOS
@@ -111,7 +136,10 @@ jobs:
         working-directory: barretenberg/bb_rs
         continue-on-error: ${{ matrix.optional }}
         run: |
+          # Install Rust and macOS target
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source $HOME/.cargo/env
+          rustup target add ${{ matrix.label }}
           cargo build -vvvv --target ${{ matrix.label }} --release
 
       - name: Build Rust Library for Android
@@ -119,8 +147,14 @@ jobs:
         working-directory: barretenberg/bb_rs
         continue-on-error: ${{ matrix.optional }}
         run: |
-          source $HOME/.cargo/env
           HOST_TAG=$HOST_TAG ANDROID_HOME="$HOME/Library/Android/sdk" NDK_VERSION="26.1.10909125" cargo build -vvvv --target ${{ matrix.label }} --release
+
+      - name: Build Rust Library for Linux
+        if: matrix.platform == 'linux'
+        working-directory: barretenberg/bb_rs
+        continue-on-error: ${{ matrix.optional }}
+        run: |
+          cargo build -vvvv --target ${{ matrix.label }} --release
 
       - name: Package iOS Rust Library Artifact (${{ matrix.label }})
         if: matrix.platform == 'ios'
@@ -175,6 +209,24 @@ jobs:
 
           # Create the tar.gz archive
           cd dist && 7z a -ttar -so -an ${{ matrix.label }} | 7z a -si ../bb_rs-${{ matrix.label }}.tar.gz
+
+      - name: Package Linux Rust Library Artifact (${{ matrix.label }})
+        if: matrix.platform == 'linux'
+        working-directory: barretenberg/bb_rs
+        continue-on-error: ${{ matrix.optional }}
+        run: |
+          mkdir -p dist/${{ matrix.label }}/lib
+          # Find the build directory (it has a hash in the name)
+          BUILD_DIR=$(find target/${{ matrix.label }}/release/build -name "bb_rs-*" -type d | head -1)
+
+          # Copy the C++ static library (libbarretenberg.a) into lib directory
+          cp $BUILD_DIR/out/build/lib/libbarretenberg.a ./dist/${{ matrix.label }}/lib/
+
+          # Copy all header files from the include directory
+          cp -r $BUILD_DIR/out/build/include ./dist/${{ matrix.label }}/
+
+          # Create the tar.gz archive
+          cd dist && tar -czf ../bb_rs-${{ matrix.label }}.tar.gz ${{ matrix.label }}
 
       - name: Upload Library Artifact (${{ matrix.label }})
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -246,6 +298,17 @@ jobs:
         with:
           name: bb_rs-aarch64-apple-darwin.tar.gz
 
+      - name: Download bb_rs artifact (x86_64-apple-darwin)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bb_rs-x86_64-apple-darwin.tar.gz
+
+      # Download Linux artifacts
+      - name: Download bb_rs artifact (x86_64-unknown-linux-gnu)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bb_rs-x86_64-unknown-linux-gnu.tar.gz
+
       # Download Android artifacts
       - name: Download bb_rs artifact (x86_64-linux-android)
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -265,8 +328,10 @@ jobs:
           prerelease: true
           files: |
             bb_rs-aarch64-apple-darwin.tar.gz
-            bb_rs-aarch64-apple-ios-sim.tar.gz
             bb_rs-aarch64-apple-ios.tar.gz
-            bb_rs-x86_64-apple-ios.tar.gz
+            bb_rs-aarch64-apple-ios-sim.tar.gz
             bb_rs-aarch64-linux-android.tar.gz
+            bb_rs-x86_64-apple-darwin.tar.gz
+            bb_rs-x86_64-apple-ios.tar.gz
             bb_rs-x86_64-linux-android.tar.gz
+            bb_rs-x86_64-unknown-linux-gnu.tar.gz
