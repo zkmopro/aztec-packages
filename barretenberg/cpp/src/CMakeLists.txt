@@ -33,6 +33,8 @@ endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     add_compile_options(-fconstexpr-ops-limit=100000000 -Wno-psabi)
+    # This gets in the way of partial object initialization (i.e. MyClass my_class{ .my_member = init_value })
+    add_compile_options(-Wno-missing-field-initializers)
 endif()
 
 # We enable -O1 level optimsations, even when compiling debug wasm, otherwise we get "local count too large" at runtime.
