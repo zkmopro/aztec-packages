@@ -80,8 +80,8 @@ jobs:
       - name: Set up iOS Environment
         if: matrix.platform == 'ios'
         run: |
-          # Install Rust for iOS cross-compilation
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          # Install Rust 1.89.0 for iOS cross-compilation
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.89.0
           source $HOME/.cargo/env
           # Add cargo bin to PATH for subsequent steps
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
@@ -92,8 +92,8 @@ jobs:
       - name: Set up Android Environment
         if: matrix.platform == 'android'
         run: |
-          # Install Rust for Android cross-compilation
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          # Install Rust 1.89.0 for Android cross-compilation
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.89.0
           source $HOME/.cargo/env
           # Add cargo bin to PATH for subsequent steps
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
@@ -116,8 +116,8 @@ jobs:
       - name: Set up Linux Environment
         if: matrix.platform == 'linux'
         run: |
-          # Install Rust for Linux cross-compilation
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          # Install Rust 1.89.0 for Linux cross-compilation
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.89.0
           source $HOME/.cargo/env
           # Add cargo bin to PATH for subsequent steps
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
@@ -136,8 +136,8 @@ jobs:
         working-directory: barretenberg/bb_rs
         continue-on-error: ${{ matrix.optional }}
         run: |
-          # Install Rust and macOS target
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          # Install Rust 1.89.0 and macOS target
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.89.0
           source $HOME/.cargo/env
           rustup target add ${{ matrix.label }}
           cargo build -vvvv --target ${{ matrix.label }} --release
