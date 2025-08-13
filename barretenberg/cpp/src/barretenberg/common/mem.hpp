@@ -6,7 +6,7 @@
 #include <memory>
 
 
-#if !defined(ANDROID) && !defined(__ANDROID__) && !defined(__APPLE__)
+#if !defined(ANDROID) && !defined(__ANDROID__) && !defined(__APPLE__) && defined(TRACY_ENABLE)
 #include "tracy/Tracy.hpp"
 // This can be altered to capture stack traces, though more expensive
 // so wrap TracyAlloc or TracyAllocS. We disable these if gates are being tracked
@@ -34,6 +34,12 @@ static std::set<size_t> FREED_GATES; // hack to prevent instrumentation failures
 #define TRACY_GATE_ALLOC(index) TracyAllocS(reinterpret_cast<void*>(index), 1, /*stack depth*/ 50)
 #define TRACY_GATE_FREE(index) TracyFreeS(reinterpret_cast<void*>(index), /*stack depth*/ 50)
 #endif
+#else
+// Tracy is disabled, provide empty macros
+#define TRACY_ALLOC(t, size)
+#define TRACY_FREE(t)
+#define TRACY_GATE_ALLOC(t)
+#define TRACY_GATE_FREE(t)
 #endif
 // #define TRACY_ALLOC(t, size) TracyAlloc(t, size)
 // #define TRACY_FREE(t) TracyFree(t)
@@ -122,7 +128,7 @@ inline void* tracy_malloc(size_t size)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory, cppcoreguidelines-no-malloc)
     void* t = malloc(size);
-    #if !defined(ANDROID) && !defined(__ANDROID__) && !defined(__APPLE__)
+    #if !defined(ANDROID) && !defined(__ANDROID__) && !defined(__APPLE__) && defined(TRACY_ENABLE)
     TRACY_ALLOC(t, size);
     #endif
     return t;
@@ -130,7 +136,7 @@ inline void* tracy_malloc(size_t size)
 
 inline void tracy_free(void* mem)
 {
-    #if !defined(ANDROID) && !defined(__ANDROID__) && !defined(__APPLE__)
+    #if !defined(ANDROID) && !defined(__ANDROID__) && !defined(__APPLE__) && defined(TRACY_ENABLE)
     TRACY_FREE(mem);
     #endif
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory, cppcoreguidelines-no-malloc)
