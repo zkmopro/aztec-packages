@@ -89,40 +89,104 @@ fn main() {
         } else {
             "OS64"
         };
-        
-        dst = Config::new("../cpp")
-            .generator("Ninja")
-            .configure_arg("-DCMAKE_BUILD_TYPE=Release")
-            .configure_arg(&format!("-DPLATFORM={}", platform))
-            .configure_arg("-DDEPLOYMENT_TARGET=15.0")
-            .configure_arg("--toolchain=../bb_rs/ios.toolchain.cmake")
-            .configure_arg("-DTRACY_ENABLE=OFF")
-            .build_target("bb")
-            .build();
+
+        let sdk_path = String::from_utf8(
+            Command::new("xcrun")
+                .args(&["--sdk", sdk, "--show-sdk-path"])
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap()
+        .trim()
+        .to_string();
+        dst = if target == "x86_64-apple-ios" {
+            // Set TARGET_ARCH for x86_64 iOS (simulator on Intel) to avoid empty -march= flag
+            Config::new("../cpp")
+                .generator("Ninja")
+                .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                .configure_arg(&format!("-DPLATFORM={}", platform))
+                .configure_arg(&format!("-DDEPLOYMENT_TARGET={}", deployment_target))
+                .configure_arg(&format!("--toolchain=../cpp/ios.toolchain.cmake"))
+                .define("CMAKE_SYSTEM_NAME", "iOS")
+                .define("CMAKE_OSX_SYSROOT", &sdk_path)
+                .define("CMAKE_OSX_ARCHITECTURES", cmake_arch)
+                .define("CMAKE_SYSTEM_PROCESSOR", arch)
+                .define("TARGET_ARCH", "skylake")
+                .build_target("bb")
+                .build()
+        } else {
+            Config::new("../cpp")
+                .generator("Ninja")
+                .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                .configure_arg(&format!("-DPLATFORM={}", platform))
+                .configure_arg(&format!("-DDEPLOYMENT_TARGET={}", deployment_target))
+                .configure_arg(&format!("--toolchain=../cpp/ios.toolchain.cmake"))
+                .define("CMAKE_SYSTEM_NAME", "iOS")
+                .define("CMAKE_OSX_SYSROOT", &sdk_path)
+                .define("CMAKE_OSX_ARCHITECTURES", cmake_arch)
+                .define("CMAKE_SYSTEM_PROCESSOR", arch)
+                .build_target("bb")
+                .build()
+        };
     }
     // Android
     else if target_os == "android" {
         let android_home = option_env!("ANDROID_HOME").expect("ANDROID_HOME not set");
         let ndk_version = option_env!("NDK_VERSION").expect("NDK_VERSION not set");
 
-        dst = Config::new("../cpp")
-        .generator("Ninja")
-        .configure_arg("-DCMAKE_BUILD_TYPE=Release")
-        .configure_arg("-DANDROID_ABI=arm64-v8a")
-        .configure_arg("-DANDROID_PLATFORM=android-33")
-        .configure_arg(&format!("--toolchain={}/ndk/{}/build/cmake/android.toolchain.cmake", android_home, ndk_version))
-        .configure_arg("-DTRACY_ENABLE=OFF")
-        .build_target("bb")
-        .build();
+        dst = if target == "x86_64-linux-android" {
+            // Set TARGET_ARCH for x86_64 Android to avoid empty -march= flag
+            Config::new("../cpp")
+                .generator("Ninja")
+                .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                .configure_arg(&format!("-DANDROID_ABI={}", android_abi))
+                .configure_arg("-DANDROID_PLATFORM=android-33")
+                .configure_arg(&format!(
+                    "-DCMAKE_TOOLCHAIN_FILE={}/build/cmake/android.toolchain.cmake",
+                    ndk_path
+                ))
+                .define("TARGET_ARCH", "skylake")
+                .build_target("bb")
+                .build()
+        } else {
+            Config::new("../cpp")
+                .generator("Ninja")
+                .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                .configure_arg(&format!("-DANDROID_ABI={}", android_abi))
+                .configure_arg("-DANDROID_PLATFORM=android-33")
+                .configure_arg(&format!(
+                    "-DCMAKE_TOOLCHAIN_FILE={}/build/cmake/android.toolchain.cmake",
+                    ndk_path
+                ))
+                .build_target("bb")
+                .build()
+        };
     }
     // MacOS and other platforms
     else {
-        dst = Config::new("../cpp")
-        .generator("Ninja")
-        .configure_arg("-DCMAKE_BUILD_TYPE=Release")            
-        .configure_arg("-DTRACY_ENABLE=OFF")
-        .build_target("bb")
-        .build();
+        // Set TARGET_ARCH for x86_64 targets to avoid empty -march= flag
+        // These are non-ARM, non-WASM platforms that need the -march flag
+        dst = match target.as_str() {
+            "x86_64-unknown-linux-gnu" | "x86_64-apple-darwin" => {
+                Config::new("../cpp")
+                    .generator("Ninja")
+                    .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                    .configure_arg("-DTRACY_ENABLE=OFF")
+                    .define("TARGET_ARCH", "skylake")
+                    .build_target("bb")
+                    .build()
+            }
+            _ => {
+                // Other platforms (ARM-based like aarch64-apple-darwin) don't need TARGET_ARCH
+                Config::new("../cpp")
+                    .generator("Ninja")
+                    .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                    .configure_arg("-DTRACY_ENABLE=OFF")
+                    .build_target("bb")
+                    .build()
+            }
+        };
     }
 
     // Add the library search path for Rust to find during linking.
