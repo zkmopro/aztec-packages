@@ -67,7 +67,6 @@ fn main() {
                 .define("CMAKE_OSX_SYSROOT", &sdk_path)
                 .define("CMAKE_OSX_ARCHITECTURES", cmake_arch)
                 .define("CMAKE_SYSTEM_PROCESSOR", arch)
-                .define("CMAKE_MAKE_PROGRAM", "/opt/homebrew/bin/ninja")
                 .define("TARGET_ARCH", "skylake")
                 .build_target("bb")
                 .build()
@@ -82,7 +81,6 @@ fn main() {
                 .define("CMAKE_OSX_SYSROOT", &sdk_path)
                 .define("CMAKE_OSX_ARCHITECTURES", cmake_arch)
                 .define("CMAKE_SYSTEM_PROCESSOR", arch)
-                .define("CMAKE_MAKE_PROGRAM", "/opt/homebrew/bin/ninja")
                 .build_target("bb")
                 .build()
         };
