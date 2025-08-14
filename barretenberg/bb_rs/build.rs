@@ -193,7 +193,19 @@ fn main() {
         // Set TARGET_ARCH for x86_64 targets to avoid empty -march= flag
         // These are non-ARM, non-WASM platforms that need the -march flag
         dst = match target.as_str() {
-            "x86_64-unknown-linux-gnu" | "x86_64-apple-darwin" => {
+            "x86_64-unknown-linux-gnu" => {
+                // Reduce parallelism for Linux builds to avoid memory issues on GitHub Actions
+                let parallel_jobs = env::var("CARGO_BUILD_JOBS").unwrap_or_else(|_| "2".to_string());
+                Config::new("../cpp")
+                    .generator("Ninja")
+                    .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                    .configure_arg("-DTRACY_ENABLE=OFF")
+                    .configure_arg(&format!("-DCMAKE_BUILD_PARALLEL_LEVEL={}", parallel_jobs))
+                    .define("TARGET_ARCH", "skylake")
+                    .build_target("bb")
+                    .build()
+            }
+            "x86_64-apple-darwin" => {
                 Config::new("../cpp")
                     .generator("Ninja")
                     .configure_arg("-DCMAKE_BUILD_TYPE=Release")

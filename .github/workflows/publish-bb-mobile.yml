@@ -30,6 +30,7 @@ jobs:
   build-mobile:
     name: Build Mobile Targets (matrix)
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
     strategy:
       matrix:
         include:
@@ -57,7 +58,7 @@ jobs:
             optional: false
           # Linux desktop targets
           - label: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: ubuntu-latest-4-cores
             platform: linux
             optional: false
           # Android targets
@@ -153,7 +154,18 @@ jobs:
         if: matrix.platform == 'linux'
         working-directory: barretenberg/bb_rs
         continue-on-error: ${{ matrix.optional }}
+        env:
+          CARGO_BUILD_JOBS: 2
+          # Reduce memory usage during compilation
+          CARGO_NET_RETRY: 3
+          # Enable swap to handle memory pressure
+          RUSTFLAGS: "-C codegen-units=1"
         run: |
+          # Free up memory and enable swap if needed
+          sudo swapoff -a || true
+          sudo swapon -a || true
+          # Check available memory
+          free -h
           cargo build -vvvv --target ${{ matrix.label }} --release
 
       - name: Package iOS Rust Library Artifact (${{ matrix.label }})
