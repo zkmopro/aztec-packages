@@ -58,7 +58,7 @@ jobs:
             optional: false
           # Linux desktop targets
           - label: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest-4-cores
+            runner: ubuntu-latest
             platform: linux
             optional: false
           # Android targets
@@ -89,6 +89,8 @@ jobs:
           # Install the iOS target
           rustup target add ${{ matrix.label }}
           echo "IPHONEOS_DEPLOYMENT_TARGET=15.0" >> $GITHUB_ENV
+          # Install ninja build system
+          brew install ninja
 
       - name: Set up Android Environment
         if: matrix.platform == 'android'
@@ -100,6 +102,8 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           # Install the Android target
           rustup target add ${{ matrix.label }}
+          # Install ninja build system
+          brew install ninja
           # Install Android SDK and NDK via brew
           brew install --cask android-commandlinetools
           # Set Android environment variables
@@ -124,6 +128,8 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           # Install the Linux target
           rustup target add ${{ matrix.label }}
+          # Install ninja build system
+          sudo apt-get update && sudo apt-get install -y ninja-build
 
       - name: Build Rust Library for iOS
         if: matrix.platform == 'ios'
@@ -141,6 +147,8 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.89.0
           source $HOME/.cargo/env
           rustup target add ${{ matrix.label }}
+          # Install ninja build system
+          brew install ninja
           cargo build -vvvv --target ${{ matrix.label }} --release
 
       - name: Build Rust Library for Android
