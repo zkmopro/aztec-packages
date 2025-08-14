@@ -10,25 +10,96 @@ fn main() {
     // cfg!(target_os = "<os>") does not work so we get the value
     // of the target_os environment variable to determine the target OS.
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+    let target = env::var("TARGET").unwrap_or_default();
 
     // Build the C++ code using CMake and get the build directory path.
     let dst;
     // iOS
     if target_os == "ios" {
-        dst = Config::new("../cpp")
-            .generator("Ninja")
-            .configure_arg("-DCMAKE_BUILD_TYPE=Release")
-            .configure_arg("-DPLATFORM=OS64")
-            .configure_arg("-DDEPLOYMENT_TARGET=15.0")
-            .configure_arg("--toolchain=../cpp/ios.toolchain.cmake")
-            .configure_arg("-DTRACY_ENABLE=OFF")
-            .build_target("bb")
-            .build();
+        
+        let platform = if target.contains("sim") || target.contains("x86_64-apple-ios") {
+            if target_arch == "aarch64" {
+                "SIMULATORARM64"
+            } else if target_arch == "x86_64" {
+                "SIMULATOR64"
+            } else {
+                "SIMULATOR"
+            }
+        } else {
+            "OS64"
+        };
+
+        // Set iOS-specific variables
+        let sdk = if target.contains("sim") || target.contains("x86_64-apple-ios") {
+            "iphonesimulator"
+        } else {
+            "iphoneos"
+        };
+        
+        let deployment_target = env::var("IPHONEOS_DEPLOYMENT_TARGET").unwrap_or_else(|_| "15.0".to_string());
+        
+        let (cmake_arch, arch) = match target_arch.as_str() {
+            "aarch64" => ("arm64", "arm64"),
+            "x86_64" => ("x86_64", "x86_64"),
+            _ => ("arm64", "arm64"), // default to arm64
+        };
+
+        let sdk_path = String::from_utf8(
+            Command::new("xcrun")
+                .args(&["--sdk", sdk, "--show-sdk-path"])
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap()
+        .trim()
+        .to_string();
+        dst = if target == "x86_64-apple-ios" {
+            // Set TARGET_ARCH for x86_64 iOS (simulator on Intel) to avoid empty -march= flag
+            Config::new("../cpp")
+                .generator("Ninja")
+                .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                .configure_arg(&format!("-DPLATFORM={}", platform))
+                .configure_arg(&format!("-DDEPLOYMENT_TARGET={}", deployment_target))
+                .configure_arg(&format!("--toolchain=../cpp/ios.toolchain.cmake"))
+                .define("CMAKE_SYSTEM_NAME", "iOS")
+                .define("CMAKE_OSX_SYSROOT", &sdk_path)
+                .define("CMAKE_OSX_ARCHITECTURES", cmake_arch)
+                .define("CMAKE_SYSTEM_PROCESSOR", arch)
+                .define("TARGET_ARCH", "skylake")
+                .build_target("bb")
+                .build()
+        } else {
+            Config::new("../cpp")
+                .generator("Ninja")
+                .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                .configure_arg(&format!("-DPLATFORM={}", platform))
+                .configure_arg(&format!("-DDEPLOYMENT_TARGET={}", deployment_target))
+                .configure_arg(&format!("--toolchain=../cpp/ios.toolchain.cmake"))
+                .define("CMAKE_SYSTEM_NAME", "iOS")
+                .define("CMAKE_OSX_SYSROOT", &sdk_path)
+                .define("CMAKE_OSX_ARCHITECTURES", cmake_arch)
+                .define("CMAKE_SYSTEM_PROCESSOR", arch)
+                .build_target("bb")
+                .build()
+        };
     }
     // Android
     else if target_os == "android" {
         let android_home = option_env!("ANDROID_HOME").expect("ANDROID_HOME not set");
         let ndk_version = option_env!("NDK_VERSION").expect("NDK_VERSION not set");
+        
+        // Set Android-specific variables
+        let android_abi = match target.as_str() {
+            "aarch64-linux-android" => "arm64-v8a",
+            "x86_64-linux-android" => "x86_64",
+            "armv7-linux-androideabi" => "armeabi-v7a",
+            "i686-linux-android" => "x86",
+            _ => "arm64-v8a", // default to arm64-v8a
+        };
+        
+        let ndk_path = format!("{}/ndk/{}", android_home, ndk_version);
 
         dst = if target == "x86_64-linux-android" {
             // Set TARGET_ARCH for x86_64 Android to avoid empty -march= flag
