@@ -474,3 +474,27 @@ WASM_EXPORT void acir_gates_aztec_client(uint8_t const* ivc_inputs_buf, uint8_t*
 
     *out = to_heap_buffer(to_buffer(totals));
 }
+
+WASM_EXPORT void acir_serialize_proof_into_fields(in_ptr acir_composer_ptr,
+                                                  uint8_t const* proof_buf,
+                                                  uint32_t const* num_inner_public_inputs,
+                                                  fr::vec_out_buf out)
+{
+    // TODO: Implement acir_serialize_proof_into_fields
+    (void)acir_composer_ptr;
+    (void)proof_buf;
+    (void)num_inner_public_inputs;
+    (void)out;
+    throw_or_abort("acir_serialize_proof_into_fields not implemented");
+}
+
+WASM_EXPORT void acir_serialize_verification_key_into_fields(in_ptr acir_composer_ptr,
+                                                             fr::vec_out_buf out_vkey,
+                                                             fr::out_buf out_key_hash)
+{
+    // TODO: Implement acir_serialize_verification_key_into_fields
+    (void)acir_composer_ptr;
+    (void)out_vkey;
+    (void)out_key_hash;
+    throw_or_abort("acir_serialize_verification_key_into_fields not implemented");
+}
