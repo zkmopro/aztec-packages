@@ -1,0 +1,113 @@
+name: Build and Publish bb_rs Android Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for release'
+        required: true
+        default: 'v1.0.0-nightly.20250723'
+      ref_name:
+        description: 'The ref name to build as'
+        required: false
+  workflow_call:
+    inputs:
+      tag_name:
+        description: 'Tag name for release'
+        required: true
+        type: string
+      ref_name:
+        description: 'The ref name to build as'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  build-android:
+    runs-on: macos-latest
+    timeout-minutes: 120
+    strategy:
+      matrix:
+        target:
+          - x86_64-linux-android
+          - aarch64-linux-android
+        include:
+          - target: x86_64-linux-android
+            android_abi: x86_64
+          - target: aarch64-linux-android
+            android_abi: arm64-v8a
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.tag_name || github.sha }}
+        submodules: recursive
+
+    - name: Set up Android Environment
+      run: |
+        # Install Rust 1.89.0 for Android cross-compilation
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.89.0
+        source $HOME/.cargo/env
+        # Add cargo bin to PATH for subsequent steps
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        # Install the Android target
+        rustup target add ${{ matrix.target }}
+        # Install ninja build system
+        brew install ninja
+        # Install Android SDK and NDK via brew
+        brew install --cask android-commandlinetools
+        # Set Android environment variables
+        echo "ANDROID_HOME=$HOME/Library/Android/sdk" >> $GITHUB_ENV
+        echo "NDK_VERSION=26.1.10909125" >> $GITHUB_ENV
+        # Create SDK directory and accept licenses
+        mkdir -p $HOME/Library/Android/sdk
+        yes | $HOME/Library/Android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        # Install NDK
+        $HOME/Library/Android/sdk/cmdline-tools/latest/bin/sdkmanager "ndk;26.1.10909125"
+        # Set HOST_TAG for Android NDK
+        HOST_TAG=$(ls $HOME/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt)
+        echo "HOST_TAG=$HOST_TAG" >> $GITHUB_ENV
+
+    - name: Build Rust Library for Android
+      working-directory: barretenberg/bb_rs
+      run: |
+        HOST_TAG=$HOST_TAG ANDROID_HOME="$HOME/Library/Android/sdk" NDK_VERSION="26.1.10909125" cargo build -vvvv --target ${{ matrix.target }} --release
+
+    - name: Package Android Rust Library Artifact
+      working-directory: barretenberg/bb_rs
+      run: |
+        mkdir -p dist/${{ matrix.target }}/lib
+        # Find the build directory (it has a hash in the name)
+        BUILD_DIR=$(find target/${{ matrix.target }}/release/build -name "bb_rs-*" -type d | head -1)
+
+        # Copy the C++ static library (libbarretenberg.a) into lib directory
+        cp $BUILD_DIR/out/build/lib/libbarretenberg.a ./dist/${{ matrix.target }}/lib/
+
+        # Copy libdeflate if it exists
+        if [ -f "$BUILD_DIR/out/build/lib/libdeflate.a" ]; then
+          cp $BUILD_DIR/out/build/lib/libdeflate.a ./dist/${{ matrix.target }}/lib/
+        elif [ -f "$BUILD_DIR/out/build/_deps/libdeflate-build/libdeflate.a" ]; then
+          cp $BUILD_DIR/out/build/_deps/libdeflate-build/libdeflate.a ./dist/${{ matrix.target }}/lib/
+        fi
+
+        # Copy all header files from the include directory
+        cp -r $BUILD_DIR/out/build/include ./dist/${{ matrix.target }}/
+
+        # Create the tar.gz archive
+        cd dist && 7z a -ttar -so -an ${{ matrix.target }} | 7z a -si ../bb_rs-${{ matrix.target }}.tar.gz
+
+        # Verify the contents
+        echo "Contents of bb_rs-${{ matrix.target }}.tar.gz:"
+        tar -tzf ../bb_rs-${{ matrix.target }}.tar.gz
+
+    - name: Upload Library Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: bb_rs-${{ matrix.target }}.tar.gz
+        path: ./barretenberg/bb_rs/bb_rs-${{ matrix.target }}.tar.gz
+        retention-days: 3
+
