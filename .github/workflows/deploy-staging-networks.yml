@@ -108,7 +108,7 @@ jobs:
           ETHEREUM_CONSENSUS_HOST_API_KEYS=${{ secrets.SEPOLIA_CONSENSUS_HOST_API_KEYS }}
           ETHEREUM_CONSENSUS_HOST_API_KEY_HEADERS=${{ secrets.SEPOLIA_CONSENSUS_HOST_API_KEY_HEADERS }}
           FUNDING_PRIVATE_KEY=${{ secrets.SEPOLIA_FUNDING_PRIVATE_KEY }}
-          LABS_INFRA_MNEMONIC=${{ secrets.SEPOLIA_LABS_INFRA_MNEMONIC }}
+          LABS_INFRA_MNEMONIC=${{ secrets.SEPOLIA_LABS_STAGING_PUBLIC_MNEMONIC }}
           OTEL_COLLECTOR_ENDPOINT=${{ secrets.OTEL_COLLECTOR_URL }}
           VERIFY_CONTRACTS=true
           ETHERSCAN_API_KEY=${{ secrets.ETHERSCAN_API_KEY }}
@@ -159,7 +159,7 @@ jobs:
           ETHEREUM_CONSENSUS_HOST_API_KEYS=${{ secrets.SEPOLIA_CONSENSUS_HOST_API_KEYS }}
           ETHEREUM_CONSENSUS_HOST_API_KEY_HEADERS=${{ secrets.SEPOLIA_CONSENSUS_HOST_API_KEY_HEADERS }}
           FUNDING_PRIVATE_KEY=${{ secrets.SEPOLIA_FUNDING_PRIVATE_KEY }}
-          LABS_INFRA_MNEMONIC=${{ secrets.SEPOLIA_LABS_INFRA_MNEMONIC }}
+          LABS_INFRA_MNEMONIC=${{ secrets.SEPOLIA_LABS_STAGING_IGNITION_MNEMONIC }}
           OTEL_COLLECTOR_ENDPOINT=${{ secrets.OTEL_COLLECTOR_URL }}
           VERIFY_CONTRACTS=true
           ETHERSCAN_API_KEY=${{ secrets.ETHERSCAN_API_KEY }}
@@ -193,7 +193,7 @@ jobs:
       - name: Write testnet network env file
         if: env.SEMVER != '' && env.MAJOR_VERSION == '2' && !contains(env.SEMVER, '-')
         run: |
-          NAMESPACE="testnet"
+          NAMESPACE="v2-testnet"
           cat > ${{ env.NETWORK_ENV_FILE }} <<EOF
           CREATE_ETH_DEVNET=false
           GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
