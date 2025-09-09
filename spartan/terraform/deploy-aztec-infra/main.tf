@@ -66,7 +66,7 @@ locals {
 
   # Define all releases in a map
   helm_releases = {
-    snapshot = var.STORE_SNAPSHOT_URL ? {
+    snapshot = var.STORE_SNAPSHOT_URL != null ? {
       name   = "${var.RELEASE_PREFIX}-snapshot"
       chart  = "aztec-snapshots"
       values = []
