@@ -177,11 +177,13 @@ locals {
         "bot-resources-${var.BOT_RESOURCE_PROFILE}.yaml",
       ]
       custom_settings = {
-        "bot.replicaCount"      = var.BOT_TRANSFERS_REPLICAS
-        "bot.txIntervalSeconds" = var.BOT_TRANSFERS_TX_INTERVAL_SECONDS
-        "bot.followChain"       = var.BOT_TRANSFERS_FOLLOW_CHAIN
-        "bot.botPrivateKey"     = var.BOT_TRANSFERS_PRIVATE_KEY
-        "bot.nodeUrl"           = local.internal_rpc_url
+        "bot.replicaCount"       = var.BOT_TRANSFERS_REPLICAS
+        "bot.txIntervalSeconds"  = var.BOT_TRANSFERS_TX_INTERVAL_SECONDS
+        "bot.followChain"        = var.BOT_TRANSFERS_FOLLOW_CHAIN
+        "bot.botPrivateKey"      = var.BOT_TRANSFERS_L2_PRIVATE_KEY
+        "bot.nodeUrl"            = local.internal_rpc_url
+        "bot.mnemonic"           = var.BOT_MNEMONIC
+        "bot.mnemonicStartIndex" = var.BOT_TRANSFERS_MNEMONIC_START_INDEX
       }
       boot_node_host_path  = ""
       bootstrap_nodes_path = ""
@@ -197,11 +199,13 @@ locals {
         "bot-resources-${var.BOT_RESOURCE_PROFILE}.yaml",
       ]
       custom_settings = {
-        "bot.replicaCount"      = var.BOT_SWAPS_REPLICAS
-        "bot.txIntervalSeconds" = var.BOT_SWAPS_TX_INTERVAL_SECONDS
-        "bot.followChain"       = var.BOT_SWAPS_FOLLOW_CHAIN
-        "bot.botPrivateKey"     = var.BOT_SWAPS_PRIVATE_KEY
-        "bot.nodeUrl"           = local.internal_rpc_url
+        "bot.replicaCount"       = var.BOT_SWAPS_REPLICAS
+        "bot.txIntervalSeconds"  = var.BOT_SWAPS_TX_INTERVAL_SECONDS
+        "bot.followChain"        = var.BOT_SWAPS_FOLLOW_CHAIN
+        "bot.botPrivateKey"      = var.BOT_SWAPS_L2_PRIVATE_KEY
+        "bot.nodeUrl"            = local.internal_rpc_url
+        "bot.mnemonic"           = var.BOT_MNEMONIC
+        "bot.mnemonicStartIndex" = var.BOT_SWAPS_MNEMONIC_START_INDEX
       }
       boot_node_host_path  = ""
       bootstrap_nodes_path = ""
@@ -222,7 +226,7 @@ resource "helm_release" "releases" {
   upgrade_install  = true
   force_update     = true
   recreate_pods    = true
-  reuse_values     = true
+  reuse_values     = false
   timeout          = 600
   wait             = true
   wait_for_jobs    = true

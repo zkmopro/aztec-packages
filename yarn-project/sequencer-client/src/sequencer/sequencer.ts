@@ -545,7 +545,13 @@ export class Sequencer extends (EventEmitter as new () => TypedEventEmitter<Sequ
       this.timetable.assertTimeLeft(proposedState, secondsIntoSlot);
     }
 
-    this.log.debug(`Transitioning from ${this.state} to ${proposedState}`, { slotNumber, secondsIntoSlot });
+    const boringStates = [SequencerState.IDLE, SequencerState.SYNCHRONIZING];
+    const logLevel =
+      boringStates.includes(proposedState) && boringStates.includes(this.state)
+        ? ('trace' as const)
+        : ('debug' as const);
+    this.log[logLevel](`Transitioning from ${this.state} to ${proposedState}`, { slotNumber, secondsIntoSlot });
+
     this.emit('state-changed', {
       oldState: this.state,
       newState: proposedState,
@@ -884,17 +890,17 @@ export class Sequencer extends (EventEmitter as new () => TypedEventEmitter<Sequ
       return;
     }
 
-    const invalidL1Timestamp = pendingChainValidationStatus.block.l1.timestamp;
-    const timeSinceChainInvalid = this.dateProvider.nowInSeconds() - Number(invalidL1Timestamp);
-    const invalidBlockNumber = pendingChainValidationStatus.block.block.number;
+    const invalidBlockNumber = pendingChainValidationStatus.block.blockNumber;
+    const invalidBlockTimestamp = pendingChainValidationStatus.block.timestamp;
+    const timeSinceChainInvalid = this.dateProvider.nowInSeconds() - Number(invalidBlockTimestamp);
 
     const { secondsBeforeInvalidatingBlockAsCommitteeMember, secondsBeforeInvalidatingBlockAsNonCommitteeMember } =
       this.config;
 
     const logData = {
-      invalidL1Timestamp,
+      invalidL1Timestamp: invalidBlockTimestamp,
       l1Timestamp,
-      invalidBlock: pendingChainValidationStatus.block.block.toBlockInfo(),
+      invalidBlock: pendingChainValidationStatus.block,
       secondsBeforeInvalidatingBlockAsCommitteeMember,
       secondsBeforeInvalidatingBlockAsNonCommitteeMember,
       ourValidatorAddresses,
