@@ -119,7 +119,7 @@ const StagingPublicGovernanceConfiguration = {
 
 const TestnetGovernanceConfiguration = {
   proposeConfig: {
-    lockDelay: 10n * 365n * 24n * 60n * 60n,
+    lockDelay: 60n * 60n * 24n * 30n,
     lockAmount: 1250n * 200_000n * 10n ** 18n,
   },
 
@@ -134,7 +134,7 @@ const TestnetGovernanceConfiguration = {
 
 const StagingIgnitionGovernanceConfiguration = {
   proposeConfig: {
-    lockDelay: 10n * 365n * 24n * 60n * 60n,
+    lockDelay: 60n * 60n * 24n * 30n,
     lockAmount: 1250n * 200_000n * 10n ** 18n,
   },
 
