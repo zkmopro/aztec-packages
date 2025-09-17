@@ -8,12 +8,7 @@
   "versioning": "always-bump-patch",
   "include-component-in-tag": false,
   "changelog-sections": [
-    { "type": "feat", "section": "Features", "hidden": false },
-    { "type": "fix", "section": "Bug Fixes", "hidden": false },
-    { "type": "chore", "section": "Miscellaneous", "hidden": false },
-    { "type": "test", "section": "Miscellaneous", "hidden": false },
-    { "type": "refactor", "section": "Miscellaneous", "hidden": false },
-    { "type": "docs", "section": "Documentation", "hidden": false }
+    { "type": "feat", "section": "Features", "hidden": false }
   ],
   "packages": {
     ".": {
