@@ -1,2 +1,8 @@
 pub mod blake2s;
 pub mod acir;
+pub mod aes_tests;
+pub mod ecdsa_tests;
+pub mod grumpkin_tests;
+pub mod pedersen_tests;
+pub mod poseidon2_tests;
+pub mod schnorr_tests;
