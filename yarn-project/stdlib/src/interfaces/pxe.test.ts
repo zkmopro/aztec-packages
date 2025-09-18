@@ -164,7 +164,7 @@ describe('PXESchema', () => {
       true,
       false,
       true,
-      { msgSender: address, contracts: {} },
+      { contracts: {} },
       [],
     );
     expect(result).toBeInstanceOf(TxSimulationResult);
@@ -195,6 +195,11 @@ describe('PXESchema', () => {
   it('getTxReceipt', async () => {
     const result = await context.client.getTxReceipt(TxHash.random());
     expect(result).toBeInstanceOf(TxReceipt);
+  });
+
+  it('getL1ToL2MessageBlock', async () => {
+    const result = await context.client.getL1ToL2MessageBlock(Fr.random());
+    expect(result).toEqual(5);
   });
 
   it('getTxEffect', async () => {
@@ -324,6 +329,9 @@ class MockPXE implements PXE {
   isL1ToL2MessageSynced(_l1ToL2Message: Fr): Promise<boolean> {
     return Promise.resolve(false);
   }
+  getL1ToL2MessageBlock(_l1ToL2Message: Fr): Promise<number | undefined> {
+    return Promise.resolve(5);
+  }
   registerAccount(secretKey: Fr, partialAddress: Fr): Promise<CompleteAddress> {
     expect(secretKey).toBeInstanceOf(Fr);
     expect(partialAddress).toBeInstanceOf(Fr);
@@ -402,13 +410,10 @@ class MockPXE implements PXE {
     _simulatePublic: boolean,
     _skipTxValidation?: boolean,
     _skipFeeEnforcement?: boolean,
-    overrides?: SimulationOverrides,
+    _overrides?: SimulationOverrides,
     scopes?: AztecAddress[],
   ): Promise<TxSimulationResult> {
     expect(txRequest).toBeInstanceOf(TxExecutionRequest);
-    if (overrides?.msgSender) {
-      expect(overrides.msgSender).toBeInstanceOf(AztecAddress);
-    }
     if (scopes) {
       expect(scopes).toEqual([]);
     }
@@ -416,7 +421,7 @@ class MockPXE implements PXE {
   }
   sendTx(tx: Tx): Promise<TxHash> {
     expect(tx).toBeInstanceOf(Tx);
-    return tx.getTxHash();
+    return Promise.resolve(tx.getTxHash());
   }
   getTxReceipt(txHash: TxHash): Promise<TxReceipt> {
     expect(txHash).toBeInstanceOf(TxHash);

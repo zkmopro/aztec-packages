@@ -21,13 +21,21 @@ export class BatchCall extends BaseContractInteraction {
    * @param options - An optional object containing additional configuration for the transaction.
    * @returns A Promise that resolves to a transaction instance.
    */
-  public async create(options: SendMethodOptions = {}): Promise<TxExecutionRequest> {
+  public async create(options: SendMethodOptions = { from: this.wallet.getAddress() }): Promise<TxExecutionRequest> {
     const requestWithoutFee = await this.request(options);
 
     const { fee: userFee, txNonce, cancellable } = options;
     const fee = await this.getFeeOptions(requestWithoutFee, userFee, { txNonce, cancellable });
 
     return await this.wallet.createTxExecutionRequest(requestWithoutFee, fee, { txNonce, cancellable });
+  }
+
+  /**
+   * Creates a new instance with no actual calls. Useful for triggering a no-op.
+   * @param wallet - The wallet to use for sending the batch call.
+   */
+  public static empty(wallet: Wallet) {
+    return new BatchCall(wallet, []);
   }
 
   /**
@@ -55,7 +63,7 @@ export class BatchCall extends BaseContractInteraction {
    * @param options - An optional object containing additional configuration for the transaction.
    * @returns The result of the transaction as returned by the contract function.
    */
-  public async simulate(options: SimulateMethodOptions = {}): Promise<any> {
+  public async simulate(options: SimulateMethodOptions): Promise<any> {
     const { indexedExecutionPayloads, utility } = (await this.getRequests()).reduce<{
       /** Keep track of the number of private calls to retrieve the return values */
       privateIndex: 0;
@@ -107,7 +115,7 @@ export class BatchCall extends BaseContractInteraction {
 
     const [utilityResults, simulatedTx] = await Promise.all([
       Promise.all(utilityCalls),
-      this.wallet.simulateTx(txRequest, true, options?.skipTxValidation, false, { msgSender: options?.from }),
+      this.wallet.simulateTx(txRequest, true, options?.skipTxValidation, false),
     ]);
 
     const results: any[] = [];

@@ -1,26 +1,73 @@
-Function                 | Metric  | No Validators (gas/tx) | 100 Validators (gas/tx) |         Δ Gas (gas/tx) |   % Overhead
--------------------------+---------+------------------------+-------------------------+------------------------+-----------------
-propose                  | Min     |     188284 (523.01)    |      388516 (1079.21)   |     200232 (556.20)    |     106.35%
-propose                  | Avg     |     198230 (550.64)    |      398614 (1107.26)   |     200384 (556.62)    |     101.09%
-propose                  | Median  |     198270 (550.75)    |      398494 (1106.93)   |     200224 (556.18)    |     100.99%
-propose                  | Max     |     214220 (595.06)    |      414847 (1152.35)   |     200627 (557.30)    |      93.65%
-propose                  | # Calls |                    100 |                     100 |                      0 |       0.00%
--------------------------+---------+------------------------+-------------------------+------------------------+-----------------
-setupEpoch               | Min     |      37680 (3.27)      |       37680 (3.27)      |          0 (0.00)      |       0.00%
-setupEpoch               | Avg     |      41805 (3.63)      |       61552 (5.34)      |      19747 (1.71)      |      47.24%
-setupEpoch               | Median  |      39680 (3.44)      |       39680 (3.44)      |          0 (0.00)      |       0.00%
-setupEpoch               | Max     |     106338 (9.23)      |      600014 (52.08)     |     493676 (42.85)     |     464.25%
-setupEpoch               | # Calls |                    100 |                     100 |                      0 |       0.00%
--------------------------+---------+------------------------+-------------------------+------------------------+-----------------
-submitEpochRootProof     | Min     |     650908 (56.50)     |      650908 (56.50)     |          0 (0.00)      |       0.00%
-submitEpochRootProof     | Avg     |     670372 (58.19)     |      670372 (58.19)     |          0 (0.00)      |       0.00%
-submitEpochRootProof     | Median  |     651004 (56.51)     |      651004 (56.51)     |          0 (0.00)      |       0.00%
-submitEpochRootProof     | Max     |     709204 (61.56)     |      709204 (61.56)     |          0 (0.00)      |       0.00%
-submitEpochRootProof     | # Calls |                      3 |                       3 |                      0 |       0.00%
--------------------------+---------+------------------------+-------------------------+------------------------+-----------------
-aggregate3               | Min     |          0 (0.00)      |      434235 (1206.21)   |     434235 (1206.21)   |       0.00%
-aggregate3               | Avg     |          0 (0.00)      |      450772 (1252.14)   |     450772 (1252.14)   |       0.00%
-aggregate3               | Median  |          0 (0.00)      |      451749 (1254.86)   |     451749 (1254.86)   |       0.00%
-aggregate3               | Max     |          0 (0.00)      |      475032 (1319.53)   |     475032 (1319.53)   |       0.00%
-aggregate3               | # Calls |                      0 |                     100 |                    100 |       0.00%
--------------------------+---------+------------------------+-------------------------+------------------------+-----------------
+# Gas Benchmark Report
+
+## IGNITION
+
+### Configuration
+
+| Parameter             | Value |
+|-----------------------|-------|
+| Slot Duration         |   192 |
+| Epoch Duration        |    48 |
+| Target Committee Size |    24 |
+| Mana Target           |     0 |
+| Proofs per Epoch      |  2.00 |
+
+### No Validators (IGNITION)
+
+| Function             | Avg Gas | Max Gas | Calldata Size | Calldata Gas |
+|----------------------|---------|---------|---------------|--------------|
+| propose              | 141,065 | 157,701 |         1,060 |       16,960 |
+| submitEpochRootProof | 556,226 | 591,073 |         3,812 |       60,992 |
+| setupEpoch           |  31,172 | 110,940 |             - |            - |
+
+**Avg Gas Cost per Second**: 858.8 gas/second
+*Epoch duration*: 2h 33m 36s
+
+### Validators (IGNITION)
+
+| Function             | Avg Gas | Max Gas | Calldata Size | Calldata Gas |
+|----------------------|---------|---------|---------------|--------------|
+| propose              | 208,357 | 227,227 |         2,852 |       45,632 |
+| submitEpochRootProof | 668,084 | 701,700 |         5,092 |       81,472 |
+| aggregate3           | 266,755 | 282,020 |             - |            - |
+| setupEpoch           |  36,638 | 329,613 |             - |            - |
+
+**Avg Gas Cost per Second**: 1,234.2 gas/second
+*Epoch duration*: 2h 33m 36s
+
+
+## Alpha
+
+### Configuration
+
+| Parameter             |       Value |
+|-----------------------|-------------|
+| Slot Duration         |          36 |
+| Epoch Duration        |          32 |
+| Target Committee Size |          48 |
+| Mana Target           | 100,000,000 |
+| Proofs per Epoch      |        2.00 |
+
+### No Validators (Alpha)
+
+| Function             | Avg Gas | Max Gas | Calldata Size | Calldata Gas |
+|----------------------|---------|---------|---------------|--------------|
+| propose              | 219,686 | 235,962 |         1,060 |       16,960 |
+| submitEpochRootProof | 682,260 | 726,001 |         3,812 |       60,992 |
+| setupEpoch           |  31,832 | 110,940 |             - |            - |
+
+**Avg Gas Cost per Second**: 7,314.5 gas/second
+*Epoch duration*: 0h 19m 12s
+
+### Validators (Alpha)
+
+| Function             | Avg Gas | Max Gas | Calldata Size | Calldata Gas |
+|----------------------|---------|---------|---------------|--------------|
+| propose              | 335,463 | 352,298 |         4,580 |       73,280 |
+| submitEpochRootProof | 890,592 | 933,081 |         6,308 |      100,928 |
+| aggregate3           | 393,732 | 406,787 |             - |            - |
+| setupEpoch           |  46,292 | 544,725 |             - |            - |
+
+**Avg Gas Cost per Second**: 10,904.8 gas/second
+*Epoch duration*: 0h 19m 12s
+

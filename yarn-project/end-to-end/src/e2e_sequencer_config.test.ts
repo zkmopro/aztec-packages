@@ -52,11 +52,10 @@ describe('e2e_sequencer_config', () => {
     });
 
     it('respects maxL2BlockGas', async () => {
-      sequencer!.updateSequencerConfig({
+      sequencer!.updateConfig({
         maxTxsPerBlock: 1,
         minTxsPerBlock: 0,
       });
-      sequencer!.flush();
 
       // Run a tx to get the total mana used
       const receipt: TxReceipt = (await bot.run()) as TxReceipt;
@@ -74,12 +73,9 @@ describe('e2e_sequencer_config', () => {
       });
 
       // Set the maxL2BlockGas to the total mana used
-      sequencer!.updateSequencerConfig({
+      sequencer!.updateConfig({
         maxL2BlockGas: Number(totalManaUsed),
       });
-
-      // Flush the sequencer to make sure the new config is applied to the next tx
-      sequencer!.flush();
 
       // Run a tx and expect it to succeed
       const receipt2: TxReceipt = (await bot.run()) as TxReceipt;
@@ -87,12 +83,9 @@ describe('e2e_sequencer_config', () => {
       expect(receipt2.status).toBe('success');
 
       // Set the maxL2BlockGas to the total mana used - 1
-      sequencer!.updateSequencerConfig({
+      sequencer!.updateConfig({
         maxL2BlockGas: Number(totalManaUsed) - 1,
       });
-
-      // Flush the sequencer to make sure the new config is applied to the next tx
-      sequencer!.flush();
 
       // Try to run a tx and expect it to fail
       await expect(bot.run()).rejects.toThrow(/Timeout awaiting isMined/);

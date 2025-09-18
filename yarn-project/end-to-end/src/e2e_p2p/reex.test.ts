@@ -89,7 +89,9 @@ describe('e2e_p2p_reex', () => {
     // Submit the txs to the mempool. We submit a single set of txs, and then inject different behaviors
     // into the validator nodes to cause them to fail in different ways.
     t.logger.info('Submitting txs');
-    txs = await submitComplexTxsTo(t.logger, t.spamContract!, NUM_TXS_PER_NODE, { callPublic: true });
+    txs = await submitComplexTxsTo(t.logger, t.defaultAccountAddress!, t.spamContract!, NUM_TXS_PER_NODE, {
+      callPublic: true,
+    });
   }, 360 * 1000);
 
   afterAll(async () => {
@@ -110,13 +112,11 @@ describe('e2e_p2p_reex', () => {
 
     // Hold off sequencers from building a block
     const pauseProposals = () =>
-      Promise.all(
-        nodes.map(node => node.getSequencer()?.updateSequencerConfig({ minTxsPerBlock: NUM_TXS_PER_NODE + 1 })),
-      );
+      Promise.all(nodes.map(node => node.getSequencer()?.updateConfig({ minTxsPerBlock: NUM_TXS_PER_NODE + 1 })));
 
     // Reenable them
     const resumeProposals = () =>
-      Promise.all(nodes.map(node => node.getSequencer()?.updateSequencerConfig({ minTxsPerBlock: NUM_TXS_PER_NODE })));
+      Promise.all(nodes.map(node => node.getSequencer()?.updateConfig({ minTxsPerBlock: NUM_TXS_PER_NODE })));
 
     // Make sure the nodes submit faulty proposals, in this case a faulty proposal is one where we remove one of the transactions
     // Such that the calculated archive will be different!
@@ -161,8 +161,8 @@ describe('e2e_p2p_reex', () => {
           const originalSimulate = simulator.simulate.bind(simulator);
           // We only stub the simulate method if it's NOT the first time we see the tx
           // so the proposer works fine, but we cause the failure in the validators.
-          jest.spyOn(simulator, 'simulate').mockImplementation(async (tx: Tx) => {
-            const txHash = (await tx.getTxHash()).toString();
+          jest.spyOn(simulator, 'simulate').mockImplementation((tx: Tx) => {
+            const txHash = tx.getTxHash().toString();
             if (seenTxs.has(txHash)) {
               t.logger.warn('Calling stubbed simulate for tx', { txHash });
               return stub(tx, originalSimulate);
@@ -179,7 +179,7 @@ describe('e2e_p2p_reex', () => {
     // Have the public tx processor take an extra long time to process the tx, so the validator times out
     const interceptTxProcessorWithTimeout = (node: AztecNodeService) => {
       interceptTxProcessorSimulate(node, async (tx: Tx, originalSimulate: (tx: Tx) => Promise<PublicTxResult>) => {
-        t.logger.warn('Public tx simulator sleeping for 40s to simulate timeout', { txHash: await tx.getTxHash() });
+        t.logger.warn('Public tx simulator sleeping for 40s to simulate timeout', { txHash: tx.getTxHash() });
         await sleep(40_000);
         return originalSimulate(tx);
       });
@@ -189,7 +189,7 @@ describe('e2e_p2p_reex', () => {
     const interceptTxProcessorWithFailure = (node: AztecNodeService) => {
       interceptTxProcessorSimulate(node, async (tx: Tx, _originalSimulate: (tx: Tx) => Promise<PublicTxResult>) => {
         await sleep(1);
-        t.logger.warn('Public tx simulator failing', { txHash: await tx.getTxHash() });
+        t.logger.warn('Public tx simulator failing', { txHash: tx.getTxHash() });
         throw new Error(`Fake tx failure`);
       });
     };
@@ -226,8 +226,8 @@ describe('e2e_p2p_reex', () => {
         // We ensure that the transactions are NOT mined in the next slot
         const txResults = await Promise.allSettled(
           txs.map(async (tx: SentTx, i: number) => {
-            t.logger.info(`Waiting for tx ${i}: ${await tx.getTxHash()} to be mined`);
-            return tx.wait({ timeout: t.ctx.aztecNodeConfig.aztecSlotDuration * 2 });
+            t.logger.info(`Waiting for tx ${i}: ${(await tx.getTxHash()).toString()} to be mined`);
+            return await tx.wait({ timeout: t.ctx.aztecNodeConfig.aztecSlotDuration * 2 });
           }),
         );
 

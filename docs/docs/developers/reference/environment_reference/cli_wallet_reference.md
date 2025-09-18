@@ -1,5 +1,6 @@
 ---
 title: CLI Wallet
+description: Comprehensive reference for the Aztec wallet command-line interface (CLI).
 tags: [sandbox, wallet, cli]
 keywords: [wallet, cli wallet]
 sidebar_position: 3
@@ -10,8 +11,8 @@ For development, it may be useful to deploy, transact, or create notes in a non-
 - Deploying contracts
 - Sending transactions
 - Bridging L1 "Fee Juice" into Aztec
-- Pushing arbitrary [notes](../../guides/smart_contracts/writing_contracts/notes/index.md) to your PXE
-- Creating [authwits](../../guides/smart_contracts/writing_contracts/authwit.md)
+- Pushing arbitrary [notes](../../guides/smart_contracts/note_types.md) to your PXE
+- Creating [authwits](../../guides/smart_contracts/authwit.md)
 - Aliasing info and secrets for further usage
 - Proving your transactions and profile gate counts
 
@@ -51,7 +52,7 @@ Many options can be set using environment variables. For example:
 
 ### Proving transactions
 
-You can prove a transaction using the aztec-wallet with a running sandbox. Follow the guide [here](../../guides/local_env/sandbox_proving.md#proving-with-aztec-wallet). Proving transactions is required when interacting with the testnet.
+You can prove a transaction using the aztec-wallet with a running sandbox. Follow the guide [here](../../guides/local_env/sandbox.md#proving-with-aztec-wallet). Proving transactions is required when interacting with the testnet.
 
 ## Aliases
 
@@ -162,7 +163,7 @@ To connect to the testnet, pass the `AZTEC_NODE_URL` to the wallet with the `--n
 
 ```bash
 export AZTEC_NODE_URL=<testnet-ip-address>
-export SPONSORED_FPC_ADDRESS=0x1260a43ecf03e985727affbbe3e483e60b836ea821b6305bea1c53398b986047
+export SPONSORED_FPC_ADDRESS=0x19b5539ca1b104d4c3705de94e4555c9630def411f025e023a13189d0c56f8f2
 # Register a new account
 aztec-wallet create-account --register-only -a main -n $AZTEC_NODE_URL
 aztec-wallet register-contract $SPONSORED_FPC_ADDRESS SponsoredFPC --from main -n $AZTEC_NODE_URL --salt 0 -a sponsoredfpc

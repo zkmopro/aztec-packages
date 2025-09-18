@@ -26,7 +26,7 @@ import type { BlobSinkServer } from '@aztec/blob-sink/server';
 import type { DeployL1ContractsReturnType } from '@aztec/ethereum';
 import { Buffer32 } from '@aztec/foundation/buffer';
 import { SecretValue } from '@aztec/foundation/config';
-import { TestERC20Abi } from '@aztec/l1-artifacts';
+import { FeeAssetHandlerAbi } from '@aztec/l1-artifacts';
 import { TokenContract } from '@aztec/noir-contracts.js/Token';
 import { type ProverNode, type ProverNodeConfig, createProverNode } from '@aztec/prover-node';
 import type { PXEService } from '@aztec/pxe/server';
@@ -141,7 +141,7 @@ export class FullProverTest {
           FullProverTest.TOKEN_SYMBOL,
           FullProverTest.TOKEN_DECIMALS,
         )
-          .send()
+          .send({ from: this.wallets[0].getAddress() })
           .deployed();
         this.logger.verbose(`Token deployed to ${asset.address}`);
 
@@ -155,11 +155,14 @@ export class FullProverTest {
         this.tokenSim = new TokenSimulator(
           this.fakeProofsAsset,
           this.wallets[0],
+          this.wallets[0].getAddress(),
           this.logger,
           this.accounts.map(a => a.address),
         );
 
-        expect(await this.fakeProofsAsset.methods.get_admin().simulate()).toBe(this.accounts[0].address.toBigInt());
+        expect(await this.fakeProofsAsset.methods.get_admin().simulate({ from: this.accounts[0].address })).toBe(
+          this.accounts[0].address.toBigInt(),
+        );
       },
     );
   }
@@ -276,7 +279,7 @@ export class FullProverTest {
     this.logger.verbose('Starting archiver for new prover node');
     const archiver = await createArchiver(
       { ...this.context.aztecNodeConfig, dataDirectory: undefined },
-      blobSinkClient,
+      { blobSinkClient },
       { blockUntilSync: true },
     );
 
@@ -286,17 +289,17 @@ export class FullProverTest {
     this.proverAddress = EthAddress.fromString(proverNodeSenderAddress);
 
     this.logger.verbose(`Funding prover node at ${proverNodeSenderAddress}`);
-    await this.mintL1ERC20(proverNodeSenderAddress, 100_000_000n);
+    await this.mintFeeJuice(proverNodeSenderAddress);
 
     this.logger.verbose('Starting prover node');
     const proverConfig: ProverNodeConfig = {
       ...this.context.aztecNodeConfig,
       txCollectionNodeRpcUrls: [],
       dataDirectory: undefined,
-      proverId: this.proverAddress.toField(),
+      proverId: this.proverAddress,
       realProofs: this.realProofs,
       proverAgentCount: 2,
-      publisherPrivateKey: new SecretValue(`0x${proverNodePrivateKey!.toString('hex')}` as const),
+      publisherPrivateKeys: [new SecretValue(`0x${proverNodePrivateKey!.toString('hex')}` as const)],
       proverNodeMaxPendingJobs: 100,
       proverNodeMaxParallelBlocksPerEpoch: 32,
       proverNodePollingIntervalMs: 100,
@@ -325,11 +328,12 @@ export class FullProverTest {
     return this;
   }
 
-  private async mintL1ERC20(recipient: Hex, amount: bigint) {
-    const erc20Address = this.context.deployL1ContractsValues.l1ContractAddresses.feeJuiceAddress;
+  private async mintFeeJuice(recipient: Hex) {
+    const handlerAddress = this.context.deployL1ContractsValues.l1ContractAddresses.feeAssetHandlerAddress!;
+    this.logger.verbose(`Minting fee juice to ${recipient} using handler at ${handlerAddress}`);
     const client = this.context.deployL1ContractsValues.l1Client;
-    const erc20 = getContract({ abi: TestERC20Abi, address: erc20Address.toString(), client });
-    const hash = await erc20.write.mint([recipient, amount]);
+    const handler = getContract({ abi: FeeAssetHandlerAbi, address: handlerAddress.toString(), client });
+    const hash = await handler.write.mint([recipient]);
     await this.context.deployL1ContractsValues.l1Client.waitForTransactionReceipt({ hash });
   }
 
@@ -365,11 +369,14 @@ export class FullProverTest {
         this.logger.verbose(`Minting ${privateAmount + publicAmount} publicly...`);
         await asset.methods
           .mint_to_public(accounts[0].address, privateAmount + publicAmount)
-          .send()
+          .send({ from: accounts[0].address })
           .wait();
 
         this.logger.verbose(`Transferring ${privateAmount} to private...`);
-        await asset.methods.transfer_to_private(accounts[0].address, privateAmount).send().wait();
+        await asset.methods
+          .transfer_to_private(accounts[0].address, privateAmount)
+          .send({ from: accounts[0].address })
+          .wait();
 
         this.logger.verbose(`Minting complete.`);
 
@@ -383,16 +390,16 @@ export class FullProverTest {
         } = this;
         tokenSim.mintPublic(address, amount);
 
-        const publicBalance = await asset.methods.balance_of_public(address).simulate();
+        const publicBalance = await asset.methods.balance_of_public(address).simulate({ from: address });
         this.logger.verbose(`Public balance of wallet 0: ${publicBalance}`);
         expect(publicBalance).toEqual(this.tokenSim.balanceOfPublic(address));
 
         tokenSim.mintPrivate(address, amount);
-        const privateBalance = await asset.methods.balance_of_private(address).simulate();
+        const privateBalance = await asset.methods.balance_of_private(address).simulate({ from: address });
         this.logger.verbose(`Private balance of wallet 0: ${privateBalance}`);
         expect(privateBalance).toEqual(tokenSim.balanceOfPrivate(address));
 
-        const totalSupply = await asset.methods.total_supply().simulate();
+        const totalSupply = await asset.methods.total_supply().simulate({ from: address });
         this.logger.verbose(`Total supply: ${totalSupply}`);
         expect(totalSupply).toEqual(tokenSim.totalSupply);
 

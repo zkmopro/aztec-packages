@@ -8,6 +8,7 @@ import { AppendOnlyTreeSnapshot } from '../trees/append_only_tree_snapshot.js';
 import { BlockHeader } from '../tx/block_header.js';
 import { Body } from './body.js';
 import { makeAppendOnlyTreeSnapshot, makeHeader } from './l2_block_code_to_purge.js';
+import type { L2BlockInfo } from './l2_block_info.js';
 
 /**
  * The data that makes up the rollup proof, with encoder decoder functions.
@@ -110,6 +111,14 @@ export class L2Block {
     return this.header.getBlockNumber();
   }
 
+  get slot(): bigint {
+    return this.header.getSlot();
+  }
+
+  get timestamp(): bigint {
+    return this.header.globalVariables.timestamp;
+  }
+
   /**
    * Returns the block's hash (hash of block header).
    * @returns The block's hash.
@@ -148,12 +157,15 @@ export class L2Block {
     };
   }
 
-  toBlockInfo(): BlockInfo {
+  toBlockInfo(): L2BlockInfo {
     return {
-      archive: this.archive.root.toString(),
+      blockHash: this.blockHash,
+      archive: this.archive.root,
+      lastArchive: this.header.lastArchive.root,
       blockNumber: this.number,
       slotNumber: Number(this.header.getSlot()),
       txCount: this.body.txEffects.length,
+      timestamp: this.header.globalVariables.timestamp,
     };
   }
 
@@ -161,10 +173,3 @@ export class L2Block {
     return this.archive.equals(other.archive) && this.header.equals(other.header) && this.body.equals(other.body);
   }
 }
-
-export type BlockInfo = {
-  archive: string;
-  blockNumber: number;
-  slotNumber: number;
-  txCount: number;
-};

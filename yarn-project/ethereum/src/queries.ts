@@ -1,4 +1,4 @@
-import type { EthAddress } from '@aztec/foundation/eth-address';
+import { EthAddress } from '@aztec/foundation/eth-address';
 
 import type { L1ContractsConfig } from './config.js';
 import { ReadOnlyGovernanceContract } from './contracts/governance.js';
@@ -24,6 +24,7 @@ export async function getL1ContractsConfig(
   const rollupAddress = addresses.rollupAddress ?? (await governanceProposer.getRollupAddress());
   const rollup = new RollupContract(publicClient, rollupAddress.toString());
   const slasherProposer = await rollup.getSlashingProposer();
+  const slasher = await rollup.getSlasherContract();
 
   const [
     l1StartBlock,
@@ -32,12 +33,17 @@ export async function getL1ContractsConfig(
     aztecSlotDuration,
     aztecProofSubmissionEpochs,
     aztecTargetCommitteeSize,
-    depositAmount,
-    minimumStake,
+    activationThreshold,
+    ejectionThreshold,
     governanceProposerQuorum,
     governanceProposerRoundSize,
     slashingQuorum,
     slashingRoundSize,
+    slashingLifetimeInRounds,
+    slashingExecutionDelayInRounds,
+    slashingOffsetInRounds,
+    slashingAmounts,
+    slashingVetoer,
     manaTarget,
     provingCostPerMana,
     rollupVersion,
@@ -50,12 +56,17 @@ export async function getL1ContractsConfig(
     rollup.getSlotDuration(),
     rollup.getProofSubmissionEpochs(),
     rollup.getTargetCommitteeSize(),
-    rollup.getDepositAmount(),
-    rollup.getMinimumStake(),
+    rollup.getActivationThreshold(),
+    rollup.getEjectionThreshold(),
     governanceProposer.getQuorumSize(),
     governanceProposer.getRoundSize(),
-    slasherProposer.getQuorumSize(),
-    slasherProposer.getRoundSize(),
+    slasherProposer?.getQuorumSize() ?? 0n,
+    slasherProposer?.getRoundSize() ?? 0n,
+    slasherProposer?.getLifetimeInRounds() ?? 0n,
+    slasherProposer?.getExecutionDelayInRounds() ?? 0n,
+    slasherProposer?.type === 'tally' ? slasherProposer.getSlashOffsetInRounds() : 0n,
+    slasherProposer?.type === 'tally' ? slasherProposer.getSlashingAmounts() : [0n, 0n, 0n],
+    slasher?.getVetoer() ?? EthAddress.ZERO,
     rollup.getManaTarget(),
     rollup.getProvingCostPerMana(),
     rollup.getVersion(),
@@ -72,14 +83,22 @@ export async function getL1ContractsConfig(
     aztecTargetCommitteeSize: Number(aztecTargetCommitteeSize),
     governanceProposerQuorum: Number(governanceProposerQuorum),
     governanceProposerRoundSize: Number(governanceProposerRoundSize),
-    depositAmount,
-    minimumStake,
+    activationThreshold,
+    ejectionThreshold,
     slashingQuorum: Number(slashingQuorum),
-    slashingRoundSize: Number(slashingRoundSize),
+    slashingRoundSizeInEpochs: Number(slashingRoundSize / aztecEpochDuration),
+    slashingLifetimeInRounds: Number(slashingLifetimeInRounds),
+    slashingExecutionDelayInRounds: Number(slashingExecutionDelayInRounds),
+    slashingVetoer,
     manaTarget: manaTarget,
     provingCostPerMana: provingCostPerMana,
     rollupVersion: Number(rollupVersion),
     genesisArchiveTreeRoot,
     exitDelaySeconds: Number(exitDelay),
+    slasherFlavor: slasherProposer?.type ?? 'tally',
+    slashingOffsetInRounds: Number(slashingOffsetInRounds),
+    slashAmountSmall: slashingAmounts[0],
+    slashAmountMedium: slashingAmounts[1],
+    slashAmountLarge: slashingAmounts[2],
   };
 }

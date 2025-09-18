@@ -104,7 +104,7 @@ pub(crate) mod tests {
         assert_eq(output.start_global_variables, left_rollup.constants.global_variables);
         assert_eq(output.end_global_variables, left_rollup.constants.global_variables);
 
-        let expected_out_hash = accumulate_sha256([left_rollup.out_hash, right_rollup.out_hash]);
+        let expected_out_hash = accumulate_sha256(left_rollup.out_hash, right_rollup.out_hash);
         assert_eq(output.out_hash, expected_out_hash);
 
         let expected_fee = FeeRecipient {
@@ -372,13 +372,13 @@ pub(crate) mod tests {
         let _ = builder.execute();
     }
 
-    #[test(should_fail_with = "last_l1_to_l2 in constants does not match the value in the previous block header")]
-    unconstrained fn mismatch_last_l1_to_l2_snapshot_fails() {
+    #[test(should_fail_with = "new_l1_to_l2 in constants does not match the computed value")]
+    unconstrained fn mismatch_new_l1_to_l2_snapshot_fails() {
         let mut builder = TestBuilder::new();
 
-        builder.inputs.previous_rollup_data[0].base_or_merge_rollup_public_inputs.constants.last_l1_to_l2.root +=
+        builder.inputs.previous_rollup_data[0].base_or_merge_rollup_public_inputs.constants.new_l1_to_l2.root +=
             1;
-        builder.inputs.previous_rollup_data[1].base_or_merge_rollup_public_inputs.constants.last_l1_to_l2.root +=
+        builder.inputs.previous_rollup_data[1].base_or_merge_rollup_public_inputs.constants.new_l1_to_l2.root +=
             1;
 
         let _ = builder.execute();

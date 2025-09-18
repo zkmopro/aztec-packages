@@ -17,55 +17,67 @@ namespace bb {
 /**
  * @brief This function verifies an Ultra Honk proof for a given Flavor.
  *
+ * @tparam IO Public input type, specifies which public inputs should be extracted from the proof
  */
-template <typename Flavor> bool UltraVerifier_<Flavor>::verify_proof(const HonkProof& proof, const HonkProof& ipa_proof)
+template <typename Flavor>
+template <class IO>
+UltraVerifier_<Flavor>::UltraVerifierOutput UltraVerifier_<Flavor>::verify_proof(
+    const typename UltraVerifier_<Flavor>::Proof& proof, const typename UltraVerifier_<Flavor>::Proof& ipa_proof)
 {
     using FF = typename Flavor::FF;
-    using RollUpIO = bb::RollupIO;
-    using DefaultIO = bb::DefaultIO;
 
     transcript->load_proof(proof);
     OinkVerifier<Flavor> oink_verifier{ verification_key, transcript };
     oink_verifier.verify();
-    const std::vector<FF>& public_inputs = oink_verifier.public_inputs;
 
-    for (size_t idx = 0; idx < CONST_PROOF_SIZE_LOG_N; idx++) {
-        verification_key->gate_challenges.emplace_back(
-            transcript->template get_challenge<FF>("Sumcheck:gate_challenge_" + std::to_string(idx)));
-    }
+    // Determine the number of rounds in the sumcheck based on whether or not padding is employed
+    const size_t log_n =
+        Flavor::USE_PADDING ? Flavor::VIRTUAL_LOG_N : static_cast<size_t>(verification_key->vk->log_circuit_size);
+    verification_key->target_sum = 0;
+    verification_key->gate_challenges =
+        transcript->template get_powers_of_challenge<FF>("Sumcheck:gate_challenge", log_n);
 
     DeciderVerifier decider_verifier{ verification_key, transcript };
     auto decider_output = decider_verifier.verify();
+
+    // Reconstruct the public inputs
+    IO inputs;
+    inputs.reconstruct_from_public(verification_key->public_inputs);
+
+    // Aggregate new pairing points with those reconstructed from the public inputs
+    decider_output.pairing_points.aggregate(inputs.pairing_inputs);
+
+    // Construrct the output
+    UltraVerifierOutput output;
+    output.result = decider_output.check();
+
+    // Logging
     if (!decider_output.sumcheck_verified) {
         info("Sumcheck failed!");
-        return false;
     }
+
     if (!decider_output.libra_evals_verified) {
         info("Libra evals failed!");
-        return false;
     }
 
-    // Reconstruct the nested IPA claim from the public inputs and run the native IPA verifier.
     if constexpr (HasIPAAccumulator<Flavor>) {
-        RollUpIO inputs;
-        inputs.reconstruct_from_public(public_inputs);
-
-        // verify the ipa_proof with this claim
+        // Reconstruct the nested IPA claim from the public inputs and run the native IPA verifier.
         ipa_transcript->load_proof(ipa_proof);
         bool ipa_result = IPA<curve::Grumpkin>::reduce_verify(ipa_verification_key, inputs.ipa_claim, ipa_transcript);
+
+        // Logging
         if (!ipa_result) {
-            return false;
+            info("IPA verification failed!");
         }
 
-        decider_output.pairing_points.aggregate(inputs.pairing_inputs);
-    } else {
-        DefaultIO inputs;
-        inputs.reconstruct_from_public(public_inputs);
-
-        decider_output.pairing_points.aggregate(inputs.pairing_inputs);
+        // Update output
+        output.result &= ipa_result;
+    } else if constexpr (std::is_same_v<IO, HidingKernelIO>) {
+        // Add ecc op tables if we are verifying a ClientIVC proof
+        output.ecc_op_tables = inputs.ecc_op_tables;
     }
 
-    return decider_output.check();
+    return output;
 }
 
 template class UltraVerifier_<UltraFlavor>;
@@ -79,5 +91,38 @@ template class UltraVerifier_<UltraKeccakZKFlavor>;
 template class UltraVerifier_<UltraRollupFlavor>;
 template class UltraVerifier_<MegaFlavor>;
 template class UltraVerifier_<MegaZKFlavor>;
+
+template UltraVerifier_<UltraFlavor>::UltraVerifierOutput UltraVerifier_<UltraFlavor>::verify_proof<DefaultIO>(
+    const Proof& proof, const Proof& ipa_proof);
+
+template UltraVerifier_<UltraZKFlavor>::UltraVerifierOutput UltraVerifier_<UltraZKFlavor>::verify_proof<DefaultIO>(
+    const Proof& proof, const Proof& ipa_proof);
+
+template UltraVerifier_<UltraKeccakFlavor>::UltraVerifierOutput UltraVerifier_<UltraKeccakFlavor>::verify_proof<
+    DefaultIO>(const Proof& proof, const Proof& ipa_proof);
+
+#ifdef STARKNET_GARAGA_FLAVORS
+template UltraVerifier_<UltraStarknetFlavor>::UltraVerifierOutput UltraVerifier_<UltraStarknetFlavor>::verify_proof<
+    DefaultIO>(const Proof& proof, const Proof& ipa_proof);
+
+template UltraVerifier_<UltraStarknetZKFlavor>::UltraVerifierOutput UltraVerifier_<UltraStarknetZKFlavor>::verify_proof<
+    DefaultIO>(const Proof& proof, const Proof& ipa_proof);
+#endif
+
+template UltraVerifier_<UltraKeccakZKFlavor>::UltraVerifierOutput UltraVerifier_<UltraKeccakZKFlavor>::verify_proof<
+    DefaultIO>(const Proof& proof, const Proof& ipa_proof);
+
+template UltraVerifier_<UltraRollupFlavor>::UltraVerifierOutput UltraVerifier_<UltraRollupFlavor>::verify_proof<
+    RollupIO>(const Proof& proof, const Proof& ipa_proof);
+
+template UltraVerifier_<MegaFlavor>::UltraVerifierOutput UltraVerifier_<MegaFlavor>::verify_proof<DefaultIO>(
+    const Proof& proof, const Proof& ipa_proof);
+
+template UltraVerifier_<MegaZKFlavor>::UltraVerifierOutput UltraVerifier_<MegaZKFlavor>::verify_proof<DefaultIO>(
+    const Proof& proof, const Proof& ipa_proof);
+
+// ClientIVC specialization
+template UltraVerifier_<MegaZKFlavor>::UltraVerifierOutput UltraVerifier_<MegaZKFlavor>::verify_proof<HidingKernelIO>(
+    const Proof& proof, const Proof& ipa_proof);
 
 } // namespace bb

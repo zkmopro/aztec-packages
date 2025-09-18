@@ -1,7 +1,6 @@
 use crate::macros::{
     functions::{
-        abi_export::create_fn_abi_export, auth_registry::AUTHORIZE_ONCE_REGISTRY,
-        call_interface_stubs::stub_fn, stub_registry,
+        auth_registry::AUTHORIZE_ONCE_REGISTRY, call_interface_stubs::stub_fn, stub_registry,
     },
     notes::NOTES,
     utils::{
@@ -13,18 +12,9 @@ use crate::macros::{
 };
 use std::meta::{ctstring::AsCtString, type_of};
 
-pub(crate) comptime fn transform_private(f: FunctionDefinition) -> Quoted {
-    let fn_abi = create_fn_abi_export(f);
+pub(crate) comptime fn transform_private(f: FunctionDefinition) {
     let fn_stub = stub_fn(f);
     stub_registry::register(f.module(), fn_stub);
-
-    // If a function is further modified as unconstrained, we throw an error
-    if f.is_unconstrained() {
-        let name = f.name();
-        panic(
-            f"Function {name} is annotated with #[private] but marked as unconstrained, remove unconstrained keyword",
-        );
-    }
 
     let module_has_initializer = module_has_initializer(f.module());
     let module_has_storage = module_has_storage(f.module());
@@ -161,7 +151,9 @@ pub(crate) comptime fn transform_private(f: FunctionDefinition) -> Quoted {
 
     let context_finish = quote { context.finish() };
 
+    // A quote to be injected at the beginning of the function body.
     let to_prepend = quote {
+        dep::aztec::oracle::version::assert_compatible_oracle_version();
         $args_hasher
         $context_creation
         $assert_initializer
@@ -185,22 +177,11 @@ pub(crate) comptime fn transform_private(f: FunctionDefinition) -> Quoted {
             .as_type(),
     );
     f.set_return_data();
-
-    fn_abi
 }
 
-pub(crate) comptime fn transform_public(f: FunctionDefinition) -> Quoted {
-    let fn_abi = create_fn_abi_export(f);
+pub(crate) comptime fn transform_public(f: FunctionDefinition) {
     let fn_stub = stub_fn(f);
     stub_registry::register(f.module(), fn_stub);
-
-    // If a function is further modified as unconstrained, we throw an error
-    if f.is_unconstrained() {
-        let name = f.name();
-        panic(
-            f"Function {name} is annotated with #[public] but marked as unconstrained, remove unconstrained keyword",
-        );
-    }
 
     let module_has_initializer = module_has_initializer(f.module());
     let module_has_storage = module_has_storage(f.module());
@@ -298,22 +279,11 @@ pub(crate) comptime fn transform_public(f: FunctionDefinition) -> Quoted {
     // bytecode.
     f.set_unconstrained(true);
     f.set_return_public(true);
-
-    fn_abi
 }
 
-pub(crate) comptime fn transform_utility(f: FunctionDefinition) -> Quoted {
-    let fn_abi = create_fn_abi_export(f);
+pub(crate) comptime fn transform_utility(f: FunctionDefinition) {
     let fn_stub = stub_fn(f);
     stub_registry::register(f.module(), fn_stub);
-
-    // Check if function is marked as unconstrained
-    if !f.is_unconstrained() {
-        let name = f.name();
-        panic(
-            f"Function {name} is annotated with #[utility] but not marked as unconstrained, add unconstrained keyword",
-        );
-    }
 
     // Create utility context
     let context_creation =
@@ -337,9 +307,9 @@ pub(crate) comptime fn transform_utility(f: FunctionDefinition) -> Quoted {
     // (`sync_private_state` function gets invoked by PXE::getPrivateEvents function).
     let message_discovery_call = create_message_discovery_call();
 
-    // Inject context creation, storage initialization, and message discovery call at the beginning of the function
-    // body.
+    // A quote to be injected at the beginning of the function body.
     let to_prepend = quote {
+        dep::aztec::oracle::version::assert_compatible_oracle_version();
         $context_creation
         $storage_init
         $message_discovery_call
@@ -349,8 +319,6 @@ pub(crate) comptime fn transform_utility(f: FunctionDefinition) -> Quoted {
     f.set_body(modified_body);
 
     f.set_return_public(true);
-
-    fn_abi
 }
 
 comptime fn create_internal_check(f: FunctionDefinition) -> Quoted {
@@ -409,22 +377,19 @@ pub(crate) comptime fn create_message_discovery_call() -> Quoted {
 ///   if (!from.eq(context.msg_sender())) {
 ///         assert_current_call_valid_authwit::<N>(&mut context, from);
 ///     } else {
-///         assert(authwit_nonce, "Invalid auhtwit nonce. When 'from' and 'msg_sender' are the same, authwit_nonce must be zero");
+///         assert(authwit_nonce, "Invalid authwit nonce. When 'from' and 'msg_sender' are the same, authwit_nonce must be zero");
 ///     }
 /// ```
 /// where `from` and `authwit_nonce` are the names of the parameters that are expected to be present in the function definition.
 /// This check is injected by the `#[authorize_once("from_arg_name", "nonce_arg_name")]`, which allows the user to define
 /// which parameters to use.
 pub(crate) comptime fn create_authorize_once_check(f: FunctionDefinition) -> Quoted {
-    if !is_fn_private(f) & !is_fn_public(f) {
-        panic(
-            f"Functions marked with #[authorize_once] must either be #[private] or #[public]",
-        );
-    }
     let maybe_authorize_once_args = AUTHORIZE_ONCE_REGISTRY.get(f);
     let authorize_once_args = if maybe_authorize_once_args.is_some() {
         maybe_authorize_once_args.unwrap()
     } else {
+        // We need to for authorize_once to have already executed so that we can retrieve its params - this depends on
+        // the order in which the attributes are applied.
         panic(
             f"Functions marked with #[authorize_once] must have the #[private] or #[public] attribute placed last",
         )

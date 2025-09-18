@@ -1,19 +1,36 @@
 import { Blob } from '@aztec/blob-lib';
+import { randomBytes } from '@aztec/foundation/crypto';
 import { EthAddress } from '@aztec/foundation/eth-address';
 import { jsonStringify } from '@aztec/foundation/json-rpc';
 import { createLogger } from '@aztec/foundation/log';
+import { retryUntil } from '@aztec/foundation/retry';
 import { sleep } from '@aztec/foundation/sleep';
 import { TestDateProvider } from '@aztec/foundation/timer';
 
 import { jest } from '@jest/globals';
 import type { Anvil } from '@viem/anvil';
-import { type Abi, createPublicClient, http } from 'viem';
+import {
+  type Abi,
+  type BlockTag,
+  type GetTransactionParameters,
+  type Hex,
+  TransactionNotFoundError,
+  type TransactionSerializable,
+  createPublicClient,
+  http,
+} from 'viem';
 import { mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 
 import { createExtendedL1Client, getPublicClient } from './client.js';
-import { type L1TxRequest, L1TxUtils, ReadOnlyL1TxUtils, defaultL1TxUtilsConfig } from './l1_tx_utils.js';
-import { L1TxUtilsWithBlobs } from './l1_tx_utils_with_blobs.js';
+import {
+  type L1TxRequest,
+  ReadOnlyL1TxUtils,
+  TxUtilsState,
+  createL1TxUtilsFromViemWallet,
+  defaultL1TxUtilsConfig,
+} from './l1_tx_utils.js';
+import { L1TxUtilsWithBlobs, createL1TxUtilsWithBlobsFromViemWallet } from './l1_tx_utils_with_blobs.js';
 import { EthCheatCodes } from './test/eth_cheat_codes.js';
 import { startAnvil } from './test/start_anvil.js';
 import type { ExtendedViemWalletClient, ViemClient } from './types.js';
@@ -68,7 +85,7 @@ describe('L1TxUtils', () => {
     let gasUtils: L1TxUtilsWithBlobs;
 
     beforeEach(() => {
-      gasUtils = new L1TxUtilsWithBlobs(l1Client, logger, dateProvider, {
+      gasUtils = createL1TxUtilsWithBlobsFromViemWallet(l1Client, logger, dateProvider, {
         gasLimitBufferPercentage: 20,
         maxGwei: 500n,
         maxAttempts: 3,
@@ -76,6 +93,78 @@ describe('L1TxUtils', () => {
         stallTimeMs: 1000,
       });
     });
+
+    it('regression: speed-up of blob tx via L1TxUtils sets non-zero maxFeePerBlobGas', async () => {
+      await cheatCodes.setAutomine(false);
+      await cheatCodes.setIntervalMining(0);
+
+      const baseUtils = createL1TxUtilsFromViemWallet(l1Client, logger, dateProvider, {
+        gasLimitBufferPercentage: 20,
+        maxGwei: 500n,
+        maxAttempts: 1,
+        checkIntervalMs: 50,
+        stallTimeMs: 300,
+      });
+
+      const blobData = new Uint8Array(131072).fill(1);
+      const kzg = Blob.getViemKzgInstance();
+
+      const request = {
+        to: '0x1234567890123456789012345678901234567890' as `0x${string}`,
+        data: '0x' as `0x${string}`,
+        value: 0n,
+      } as const;
+
+      const estimatedGas = await l1Client.estimateGas(request);
+
+      // Send initial blob tx with a valid maxFeePerBlobGas
+      const { txHash } = await baseUtils.sendTransaction(request, undefined, {
+        blobs: [blobData],
+        kzg,
+        maxFeePerBlobGas: 10n * WEI_CONST,
+      });
+
+      // Capture the replacement tx when it is being signed
+      const originalSign = l1Client.signTransaction;
+      const signedTxs: TransactionSerializable[] = [];
+      using _spy = jest.spyOn(l1Client, 'signTransaction').mockImplementation((arg: any) => {
+        signedTxs.push(arg);
+        return originalSign(arg);
+      });
+
+      // Trigger monitor with blob inputs but WITHOUT maxFeePerBlobGas so the bug manifests
+      const monitorPromise = baseUtils.monitorTransaction(
+        request,
+        txHash,
+        new Set(),
+        { gasLimit: estimatedGas },
+        undefined,
+        {
+          blobs: [blobData],
+          kzg,
+        },
+      );
+
+      // Wait until a speed-up is attempted
+      await retryUntil(
+        () => baseUtils['state'] === TxUtilsState.SPEED_UP || signedTxs.length > 0,
+        'waiting for speed-up',
+        40,
+        0.05,
+      );
+
+      // Interrupt to stop the monitor loop and avoid hanging the test
+      baseUtils.interrupt();
+      await expect(monitorPromise).rejects.toThrow();
+
+      // Ensure we captured a replacement tx being signed
+      expect(signedTxs.length).toBeGreaterThan(0);
+      const replacement = signedTxs[signedTxs.length - 1] as any;
+
+      // Assert fix: maxFeePerBlobGas is populated and non-zero on replacement
+      expect(replacement.maxFeePerBlobGas).toBeDefined();
+      expect(replacement.maxFeePerBlobGas!).toBeGreaterThan(0n);
+    }, 20_000);
 
     it('sends and monitors a simple transaction', async () => {
       const { receipt } = await gasUtils.sendAndMonitorTransaction({
@@ -85,6 +174,7 @@ describe('L1TxUtils', () => {
       });
 
       expect(receipt.status).toBe('success');
+      expect(gasUtils.state).toBe(TxUtilsState.MINED);
     }, 10_000);
 
     it('handles gas price spikes by retrying with higher gas price', async () => {
@@ -134,17 +224,19 @@ describe('L1TxUtils', () => {
       });
 
       // Monitor should detect stall and replace with higher gas price
-      const monitorFn = gasUtils.monitorTransaction(request, txHash, { gasLimit: estimatedGas }, undefined, {
+      const monitorFn = gasUtils.monitorTransaction(request, txHash, new Set(), { gasLimit: estimatedGas }, undefined, {
         blobs: [blobData],
         kzg,
         maxFeePerBlobGas: WEI_CONST * 20n,
       });
 
       await sleep(2000);
+      expect(gasUtils.state).toBe(TxUtilsState.SPEED_UP);
       // re-enable mining
       await cheatCodes.setIntervalMining(1);
       const receipt = await monitorFn;
       expect(receipt.status).toBe('success');
+      expect(gasUtils.state).toBe(TxUtilsState.MINED);
       // Verify that a replacement transaction was created
       expect(receipt.transactionHash).not.toBe(txHash);
 
@@ -184,7 +276,7 @@ describe('L1TxUtils', () => {
       await cheatCodes.evmMine();
 
       // First deploy without any buffer
-      const baselineGasUtils = new L1TxUtilsWithBlobs(l1Client, logger, dateProvider, {
+      const baselineGasUtils = createL1TxUtilsWithBlobsFromViemWallet(l1Client, logger, dateProvider, {
         gasLimitBufferPercentage: 0,
         maxGwei: 500n,
         maxAttempts: 5,
@@ -203,7 +295,7 @@ describe('L1TxUtils', () => {
       });
 
       // Now deploy with 20% buffer
-      const bufferedGasUtils = new L1TxUtilsWithBlobs(l1Client, logger, dateProvider, {
+      const bufferedGasUtils = createL1TxUtilsWithBlobsFromViemWallet(l1Client, logger, dateProvider, {
         gasLimitBufferPercentage: 20,
         maxGwei: 500n,
         maxAttempts: 3,
@@ -270,7 +362,7 @@ describe('L1TxUtils', () => {
     });
 
     it('respects minimum gas price bump for replacements', async () => {
-      const gasUtils = new L1TxUtilsWithBlobs(l1Client, logger, dateProvider, {
+      const gasUtils = createL1TxUtilsWithBlobsFromViemWallet(l1Client, logger, dateProvider, {
         ...defaultL1TxUtilsConfig,
         priorityFeeRetryBumpPercentage: 5, // Set lower than minimum 10%
       });
@@ -372,17 +464,19 @@ describe('L1TxUtils', () => {
         expect(message.split('\n').length).toBeGreaterThan(1);
 
         // Check that we have the key error information
-        expect(message).toContain('fee cap');
+        expect(message).toContain('max fee per gas less than block base fee');
 
         // Check request body formatting if present
         if (message.includes('Request body:')) {
           const bodyStart = message.indexOf('Request body:');
           const body = message.slice(bodyStart);
           expect(body).toContain('eth_sendRawTransaction');
+
+          // TODO: Fix this test. We no longer generate an error that gets truncated
           // Check params are truncated if too long
-          if (body.includes('0x')) {
-            expect(body).toContain('...');
-          }
+          // if (body.includes('0x')) {
+          //   expect(body).toContain('...');
+          // }
         }
       }
     }, 10_000);
@@ -502,14 +596,14 @@ describe('L1TxUtils', () => {
       const txTimeoutAt = new Date(now + 1000);
       const txRequest: L1TxRequest = { to: '0x1234567890123456789012345678901234567890', data: '0x', value: 0n };
       const tx = await gasUtils.sendTransaction(txRequest);
-      const monitorPromise = gasUtils.monitorTransaction(txRequest, tx.txHash, tx, { txTimeoutAt });
+      const monitorPromise = gasUtils.monitorTransaction(txRequest, tx.txHash, new Set(), tx, { txTimeoutAt });
 
-      await sleep(1000);
+      await sleep(100);
       await cheatCodes.dropTransaction(tx.txHash);
       await cheatCodes.setNextBlockTimestamp(txTimeoutAt);
       await cheatCodes.mine();
       await expect(monitorPromise).rejects.toThrow(/timed out/);
-      expect(dateProvider.now() - now).toBeGreaterThanOrEqual(990);
+      expect(dateProvider.now() - now).toBeGreaterThanOrEqual(90);
     }, 20_000);
 
     it('attempts to cancel timed out transactions', async () => {
@@ -527,10 +621,13 @@ describe('L1TxUtils', () => {
       const { txHash } = await gasUtils.sendTransaction(request);
       const initialTx = await l1Client.getTransaction({ hash: txHash });
 
+      expect(gasUtils.state).toBe(TxUtilsState.SENT);
+
       // Try to monitor with a short timeout
       const monitorPromise = gasUtils.monitorTransaction(
         request,
         txHash,
+        new Set(),
         { gasLimit: initialTx.gas! },
         { txTimeoutMs: 100, checkIntervalMs: 10 }, // Short timeout to trigger cancellation quickly
       );
@@ -565,6 +662,94 @@ describe('L1TxUtils', () => {
       await expect(l1Client.getTransaction({ hash: txHash })).rejects.toThrow();
     }, 10_000);
 
+    it('monitors all sent txs', async () => {
+      // Disable auto-mining to control block production
+      await cheatCodes.setIntervalMining(0);
+      await cheatCodes.setAutomine(false);
+
+      const request = {
+        to: '0x1234567890123456789012345678901234567890' as `0x${string}`,
+        data: '0x' as `0x${string}`,
+        value: 1n,
+      };
+
+      const originalSendRawTransaction = l1Client.sendRawTransaction;
+      let cancellationSent = false;
+      let txBeingSigned: TransactionSerializable | undefined = undefined;
+
+      const sentTxs: Map<Hex, TransactionSerializable> = new Map();
+
+      // We need to intercept the call to send a transaction to L1.
+      // We let the first one through but no more.
+      // This blocks any cancellations
+      using _1 = jest
+        .spyOn(l1Client, 'sendRawTransaction')
+        .mockImplementationOnce(async arg => {
+          // This is the actual transaction
+          const sentTx = { ...txBeingSigned! };
+          const hash = await originalSendRawTransaction.call(this, arg);
+          sentTxs.set(hash, sentTx);
+          return hash;
+        })
+        .mockImplementation(_arg => {
+          // Do nothing, there are any/all cancellations
+          const sentTx = txBeingSigned!;
+          const hash = randomBytes(32).toString('hex') as Hex;
+          sentTxs.set(hash, sentTx);
+          cancellationSent = true;
+          return Promise.resolve(hash);
+        });
+
+      // Return the previously signed/sent transaction. We use a cache here as cancels are not sent to Anvil
+      using _2 = jest
+        .spyOn(l1Client, 'getTransaction')
+        .mockImplementation((arg: GetTransactionParameters<BlockTag>) => {
+          // Do nothing
+          const tx = sentTxs.get(arg.hash!);
+          return Promise.resolve(tx as any);
+        });
+
+      // We need to capture the transactions at the point of being signed otherwise there is no nonce!
+      const originalSign = l1Client.signTransaction;
+
+      using _3 = jest.spyOn(l1Client, 'signTransaction').mockImplementation((arg: any) => {
+        txBeingSigned = arg;
+        return originalSign(txBeingSigned as any);
+      });
+
+      // Send initial transaction
+      const { txHash } = await gasUtils.sendTransaction(request);
+      const initialTx = await l1Client.getTransaction({ hash: txHash });
+
+      expect(gasUtils.state).toBe(TxUtilsState.SENT);
+
+      // Monitor the tx. We will think it has timed out and submit a cancellation.
+      const monitorPromise = gasUtils.monitorTransaction(
+        request,
+        txHash,
+        new Set(),
+        { gasLimit: initialTx.gas! },
+        { txTimeoutMs: 100, checkIntervalMs: 10 },
+      );
+
+      // Wait for timeout and catch the error
+      await expect(monitorPromise).rejects.toThrow('timed out');
+
+      // Wait for cancellation to be sent
+      await sleep(100);
+
+      // Cancellation should have been sent, but will have been dropped
+      expect(cancellationSent).toBeTruthy();
+
+      // Now we mine a block, this should mine the tx that 'timed out'
+      await cheatCodes.evmMine();
+
+      await retryUntil(() => gasUtils.state === TxUtilsState.MINED, 'Waiting for mined status', 10, 0.1);
+
+      // Although the monitoring threw that the tx timed out. Internally it should have recognized that the tx was mined
+      expect(gasUtils.state).toBe(TxUtilsState.MINED);
+    }, 10_000);
+
     it('attempts to cancel timed out blob transactions with correct parameters', async () => {
       // Disable auto-mining to control block production
       await cheatCodes.setAutomine(false);
@@ -592,6 +777,7 @@ describe('L1TxUtils', () => {
       const monitorPromise = gasUtils.monitorTransaction(
         request,
         txHash,
+        new Set(),
         { gasLimit: initialTx.gas! },
         { txTimeoutMs: 100, checkIntervalMs: 10 }, // Short timeout to trigger cancellation quickly
         {
@@ -605,15 +791,22 @@ describe('L1TxUtils', () => {
       await expect(monitorPromise).rejects.toThrow('timed out');
 
       // Wait for cancellation tx to be sent
-      await sleep(100);
+      await sleep(500);
 
       // Get the nonce that was used
       const nonce = initialTx.nonce;
 
       // Get pending transactions
-      const pendingBlock = await l1Client.getBlock({ blockTag: 'pending' });
-      const pendingTxHash = pendingBlock.transactions[0];
-      const cancelTx = await l1Client.getTransaction({ hash: pendingTxHash });
+      const cancelTx = await retryUntil(
+        async () => {
+          const pendingBlock = await l1Client.getBlock({ blockTag: 'pending' });
+          const pendingTxHash = pendingBlock.transactions[0];
+          return pendingTxHash && l1Client.getTransaction({ hash: pendingTxHash }).catch(() => undefined);
+        },
+        'get cancel tx',
+        5,
+        0.1,
+      );
 
       // Verify cancellation tx
       expect(cancelTx).toBeDefined();
@@ -630,8 +823,8 @@ describe('L1TxUtils', () => {
       await cheatCodes.evmMine();
 
       // Verify the original transaction is no longer present
-      await expect(l1Client.getTransaction({ hash: txHash })).rejects.toThrow();
-    }, 10_000);
+      await expect(l1Client.getTransaction({ hash: txHash })).rejects.toThrow(TransactionNotFoundError);
+    }, 20_000);
 
     it('does not attempt to cancel a timed out tx when cancelTxOnTimeout is false', async () => {
       const request = {
@@ -647,6 +840,7 @@ describe('L1TxUtils', () => {
       const monitorPromise = gasUtils.monitorTransaction(
         request,
         txHash,
+        new Set(),
         { gasLimit: initialTx.gas! },
         { txTimeoutMs: 100, checkIntervalMs: 10, cancelTxOnTimeout: false }, // Disable cancellation
       );
@@ -763,7 +957,7 @@ describe('L1TxUtils', () => {
     });
 
     it('L1TxUtils can be instantiated with wallet client and has write methods', () => {
-      const l1TxUtils = new L1TxUtils(walletClient, logger);
+      const l1TxUtils = createL1TxUtilsFromViemWallet(walletClient, logger);
       expect(l1TxUtils).toBeDefined();
       expect(l1TxUtils.client).toBe(walletClient);
 
@@ -776,7 +970,7 @@ describe('L1TxUtils', () => {
     });
 
     it('L1TxUtils inherits all read-only methods from ReadOnlyL1TxUtils', () => {
-      const l1TxUtils = new L1TxUtils(walletClient, logger);
+      const l1TxUtils = createL1TxUtilsFromViemWallet(walletClient, logger);
 
       // Verify all read-only methods are available
       expect(l1TxUtils.getBlock).toBeDefined();
@@ -790,7 +984,7 @@ describe('L1TxUtils', () => {
 
     it('L1TxUtils cannot be instantiated with public client', () => {
       expect(() => {
-        new L1TxUtils(publicClient as any, logger);
+        createL1TxUtilsFromViemWallet(publicClient as any, logger);
       }).toThrow();
     });
   });

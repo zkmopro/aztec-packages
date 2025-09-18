@@ -18,18 +18,16 @@
 #include "barretenberg/vm2/simulation/lib/db_interfaces.hpp"
 #include "barretenberg/vm2/simulation/lib/serialization.hpp"
 #include "barretenberg/vm2/simulation/range_check.hpp"
+#include "barretenberg/vm2/simulation/retrieved_bytecodes_tree_check.hpp"
 #include "barretenberg/vm2/simulation/siloing.hpp"
 #include "barretenberg/vm2/simulation/update_check.hpp"
 
 namespace bb::avm2::simulation {
 
-struct BytecodeNotFoundError : public std::runtime_error {
-    BytecodeNotFoundError(BytecodeId id, const std::string& message)
+struct BytecodeRetrievalError : public std::runtime_error {
+    BytecodeRetrievalError(const std::string& message)
         : std::runtime_error(message)
-        , bytecode_id(id)
     {}
-
-    BytecodeId bytecode_id;
 };
 
 struct InstructionFetchingError : public std::runtime_error {
@@ -56,19 +54,19 @@ class TxBytecodeManager : public TxBytecodeManagerInterface {
   public:
     TxBytecodeManager(ContractDBInterface& contract_db,
                       HighLevelMerkleDBInterface& merkle_db,
-                      Poseidon2Interface& poseidon2,
                       BytecodeHashingInterface& bytecode_hasher,
                       RangeCheckInterface& range_check,
                       ContractInstanceManagerInterface& contract_instance_manager,
+                      RetrievedBytecodesTreeCheckInterface& retrieved_bytecodes_tree_check,
                       EventEmitterInterface<BytecodeRetrievalEvent>& retrieval_events,
                       EventEmitterInterface<BytecodeDecompositionEvent>& decomposition_events,
                       EventEmitterInterface<InstructionFetchingEvent>& fetching_events)
         : contract_db(contract_db)
         , merkle_db(merkle_db)
-        , poseidon2(poseidon2)
         , bytecode_hasher(bytecode_hasher)
         , range_check(range_check)
         , contract_instance_manager(contract_instance_manager)
+        , retrieved_bytecodes_tree_check(retrieved_bytecodes_tree_check)
         , retrieval_events(retrieval_events)
         , decomposition_events(decomposition_events)
         , fetching_events(fetching_events)
@@ -80,15 +78,14 @@ class TxBytecodeManager : public TxBytecodeManagerInterface {
   private:
     ContractDBInterface& contract_db;
     HighLevelMerkleDBInterface& merkle_db;
-    Poseidon2Interface& poseidon2;
     BytecodeHashingInterface& bytecode_hasher;
     RangeCheckInterface& range_check;
     ContractInstanceManagerInterface& contract_instance_manager;
+    RetrievedBytecodesTreeCheckInterface& retrieved_bytecodes_tree_check;
     EventEmitterInterface<BytecodeRetrievalEvent>& retrieval_events;
     EventEmitterInterface<BytecodeDecompositionEvent>& decomposition_events;
     EventEmitterInterface<InstructionFetchingEvent>& fetching_events;
     unordered_flat_map<BytecodeId, std::shared_ptr<std::vector<uint8_t>>> bytecodes;
-    BytecodeId next_bytecode_id = 0;
 };
 
 // Manages the bytecode of a single nested call.
@@ -98,8 +95,14 @@ class BytecodeManagerInterface {
     virtual ~BytecodeManagerInterface() = default;
 
     virtual Instruction read_instruction(uint32_t pc) = 0;
+
     // Returns the id of the current bytecode. Tries to fetch it if not already done.
+    // Throws BytecodeNotFoundError if contract does not exist.
     virtual BytecodeId get_bytecode_id() = 0;
+
+    // Returns the id of the current bytecode if it has been retrieved, std::nullopt otherwise.
+    // Won't try to retrieve the bytecode.
+    virtual std::optional<BytecodeId> get_retrieved_bytecode_id() = 0;
 };
 
 class BytecodeManager : public BytecodeManagerInterface {
@@ -113,6 +116,7 @@ class BytecodeManager : public BytecodeManagerInterface {
     {
         return tx_bytecode_manager.read_instruction(get_bytecode_id(), pc);
     }
+
     BytecodeId get_bytecode_id() override
     {
         if (!bytecode_id.has_value()) {
@@ -120,6 +124,8 @@ class BytecodeManager : public BytecodeManagerInterface {
         }
         return bytecode_id.value();
     }
+
+    std::optional<BytecodeId> get_retrieved_bytecode_id() override { return bytecode_id; }
 
   private:
     AztecAddress address;

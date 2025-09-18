@@ -66,10 +66,9 @@ export class BlockAttestation extends Gossipable {
     return this.payload.header.slotNumber;
   }
 
-  /**Get sender
-   *
-   * Lazily evaluate and cache the sender of the attestation
-   * @returns The sender of the attestation
+  /**
+   * Lazily evaluate and cache the signer of the attestation
+   * @returns The signer of the attestation
    */
   getSender(): EthAddress {
     if (!this.sender) {
@@ -97,6 +96,10 @@ export class BlockAttestation extends Gossipable {
 
   static empty(): BlockAttestation {
     return new BlockAttestation(0, ConsensusPayload.empty(), Signature.empty());
+  }
+
+  static random(): BlockAttestation {
+    return new BlockAttestation(Math.floor(Math.random() * 1000) + 1, ConsensusPayload.random(), Signature.random());
   }
 
   getSize(): number {

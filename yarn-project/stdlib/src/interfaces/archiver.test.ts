@@ -11,7 +11,8 @@ import { AztecAddress } from '../aztec-address/index.js';
 import { CommitteeAttestation, L2BlockHash } from '../block/index.js';
 import { L2Block } from '../block/l2_block.js';
 import type { L2Tips } from '../block/l2_block_source.js';
-import type { PublishedL2Block } from '../block/published_l2_block.js';
+import { PublishedL2Block } from '../block/published_l2_block.js';
+import type { ValidateBlockResult } from '../block/validate_block_result.js';
 import { getContractClassFromArtifact } from '../contract/contract_class.js';
 import {
   type ContractClassPublic,
@@ -245,11 +246,27 @@ describe('ArchiverApiSchema', () => {
     const result = await context.client.getL1Timestamp();
     expect(result).toBe(1n);
   });
+
+  it('getPendingChainValidationStatus', async () => {
+    const result = await context.client.getPendingChainValidationStatus();
+    expect(result).toEqual({ valid: true });
+  });
+
+  it('isPendingChainInvalid', async () => {
+    const result = await context.client.isPendingChainInvalid();
+    expect(result).toBe(false);
+  });
 });
 
 class MockArchiver implements ArchiverApi {
   constructor(private artifact: ContractArtifact) {}
 
+  isPendingChainInvalid(): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+  getPendingChainValidationStatus(): Promise<ValidateBlockResult> {
+    return Promise.resolve({ valid: true });
+  }
   syncImmediate() {
     return Promise.resolve();
   }
@@ -276,11 +293,11 @@ class MockArchiver implements ArchiverApi {
   }
   async getPublishedBlocks(from: number, _limit: number, _proven?: boolean): Promise<PublishedL2Block[]> {
     return [
-      {
+      PublishedL2Block.fromFields({
         block: await L2Block.random(from),
         attestations: [CommitteeAttestation.random()],
         l1: { blockHash: `0x`, blockNumber: 1n, timestamp: 0n },
-      },
+      }),
     ];
   }
   async getTxEffect(_txHash: TxHash): Promise<IndexedTxEffect | undefined> {

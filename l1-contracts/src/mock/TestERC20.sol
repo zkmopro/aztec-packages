@@ -14,10 +14,7 @@ contract TestERC20 is ERC20, IMintableERC20, Ownable2Step {
     _;
   }
 
-  constructor(string memory _name, string memory _symbol, address _owner)
-    ERC20(_name, _symbol)
-    Ownable(_owner)
-  {
+  constructor(string memory _name, string memory _symbol, address _owner) ERC20(_name, _symbol) Ownable(_owner) {
     minters[_owner] = true;
     emit MinterAdded(_owner);
   }
@@ -37,11 +34,8 @@ contract TestERC20 is ERC20, IMintableERC20, Ownable2Step {
   }
 
   function acceptOwnership() public virtual override(Ownable2Step) {
-    address oldOwner = owner();
     address newOwner = pendingOwner();
     super.acceptOwnership();
-
-    removeMinter(oldOwner);
     addMinter(newOwner);
   }
 }

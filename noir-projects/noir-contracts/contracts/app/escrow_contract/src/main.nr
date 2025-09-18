@@ -1,8 +1,6 @@
 // Sample escrow contract that stores a balance of a private token on behalf of an owner.
 use dep::aztec::macros::aztec;
 
-mod test;
-
 #[aztec]
 pub contract Escrow {
     use dep::aztec::{
@@ -31,15 +29,17 @@ pub contract Escrow {
         storage.owner.initialize(note).emit(encode_and_encrypt_note(&mut context, owner));
     }
 
+    // docs:start:withdraw
     // Withdraws balance. Requires that msg.sender is the owner.
     #[private]
     fn withdraw(token: AztecAddress, amount: u128, recipient: AztecAddress) {
         let sender = context.msg_sender();
 
         let note = storage.owner.get_note();
-        assert(note.address == sender);
+        assert(note.get_address() == sender);
         // docs:start:call_function
         Token::at(token).transfer(recipient, amount).call(&mut context);
         // docs:end:call_function
     }
+    // docs:end:withdraw
 }

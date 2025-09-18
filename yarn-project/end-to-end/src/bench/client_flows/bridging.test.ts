@@ -1,5 +1,4 @@
 import { AccountWallet, type SimulateMethodOptions } from '@aztec/aztec.js';
-import { FEE_FUNDING_FOR_TESTER_ACCOUNT } from '@aztec/constants';
 import type { FPCContract } from '@aztec/noir-contracts.js/FPC';
 import type { SponsoredFPCContract } from '@aztec/noir-contracts.js/SponsoredFPC';
 import { TokenContract } from '@aztec/noir-contracts.js/Token';
@@ -54,7 +53,7 @@ describe('Bridging benchmark', () => {
         // the brigde has an owner, which is the only one that can claim
         crossChainTestHarness = await t.createCrossChainTestHarness(benchysWallet);
         // Fund benchy with bananas, so they can pay for the bridging using the private FPC
-        await t.mintPrivateBananas(FEE_FUNDING_FOR_TESTER_ACCOUNT, benchysWallet.getAddress());
+        await t.mintPrivateBananas(1000n * 10n ** 18n, benchysWallet.getAddress());
         // Register admin as sender in benchy's wallet, since we need it to discover the minted bananas
         await benchysWallet.registerSender(adminWallet.getAddress());
         // Register both FPC and BananCoin on the user's PXE so we can simulate and prove
@@ -80,6 +79,7 @@ describe('Bridging benchmark', () => {
           // 3. Consume L1 -> L2 message and mint private tokens on L2
           const paymentMethod = t.paymentMethods[benchmarkingPaymentMethod];
           const options: SimulateMethodOptions = {
+            from: benchysWallet.getAddress(),
             fee: { paymentMethod: await paymentMethod.forWallet(benchysWallet) },
           };
 
@@ -101,7 +101,8 @@ describe('Bridging benchmark', () => {
               2 + // TokenBridge claim_private + kernel inner
               2 + // BridgedAsset mint_to_private + kernel inner
               1 + // Kernel reset
-              1, // Kernel tail
+              1 + // Kernel tail
+              1, // Kernel hiding
           );
 
           if (process.env.SANITY_CHECKS) {

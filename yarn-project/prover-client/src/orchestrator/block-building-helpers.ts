@@ -17,7 +17,7 @@ import { padArrayEnd } from '@aztec/foundation/collection';
 import { sha256ToField, sha256Trunc } from '@aztec/foundation/crypto';
 import { BLS12Point, Fr } from '@aztec/foundation/fields';
 import { type Tuple, assertLength, toFriendlyJSON } from '@aztec/foundation/serialize';
-import { MembershipWitness, MerkleTreeCalculator, computeUnbalancedMerkleRoot } from '@aztec/foundation/trees';
+import { MembershipWitness, MerkleTreeCalculator, computeUnbalancedMerkleTreeRoot } from '@aztec/foundation/trees';
 import { getVKTreeRoot } from '@aztec/noir-protocol-circuits-types/vk-tree';
 import { protocolContractTreeRoot } from '@aztec/protocol-contracts';
 import { computeFeePayerBalanceLeafSlot } from '@aztec/protocol-contracts/fee-juice';
@@ -71,9 +71,7 @@ export const insertSideEffectsAndBuildBaseRollupHints = runInSpan(
     span: Span,
     tx: ProcessedTx,
     globalVariables: GlobalVariables,
-    // Passing in the snapshot instead of getting it from the db because it might've been updated in the orchestrator
-    // when base parity proof is being generated.
-    l1ToL2MessageTreeSnapshot: AppendOnlyTreeSnapshot,
+    newL1ToL2MessageTreeSnapshot: AppendOnlyTreeSnapshot,
     db: MerkleTreeWriteOperations,
     startSpongeBlob: SpongeBlob,
   ) => {
@@ -209,7 +207,7 @@ export const insertSideEffectsAndBuildBaseRollupHints = runInSpan(
 
       const constants = BlockConstantData.from({
         lastArchive,
-        lastL1ToL2: l1ToL2MessageTreeSnapshot,
+        newL1ToL2: newL1ToL2MessageTreeSnapshot,
         vkTreeRoot: getVKTreeRoot(),
         protocolContractTreeRoot,
         globalVariables,
@@ -338,25 +336,15 @@ export const buildHeaderAndBodyFromTxs = runInSpan(
     const txEffects = txs.map(tx => tx.txEffect);
     const body = new Body(txEffects);
 
-    const numTxs = body.txEffects.length;
-    const outHash =
-      numTxs === 0
-        ? Fr.ZERO
-        : numTxs === 1
-          ? new Fr(body.txEffects[0].txOutHash())
-          : new Fr(
-              computeUnbalancedMerkleRoot(
-                body.txEffects.map(tx => tx.txOutHash()),
-                TxEffect.empty().txOutHash(),
-              ),
-            );
+    const txOutHashes = txEffects.map(tx => tx.txOutHash());
+    const outHash = txOutHashes.length === 0 ? Fr.ZERO : new Fr(computeUnbalancedMerkleTreeRoot(txOutHashes));
 
     const parityShaRoot = await computeInHashFromL1ToL2Messages(l1ToL2Messages);
     const blobsHash = getBlobsHashFromBlobs(await Blob.getBlobsPerBlock(body.toBlobFields()));
 
     const contentCommitment = new ContentCommitment(blobsHash, parityShaRoot, outHash);
 
-    const fees = body.txEffects.reduce((acc, tx) => acc.add(tx.transactionFee), Fr.ZERO);
+    const fees = txEffects.reduce((acc, tx) => acc.add(tx.transactionFee), Fr.ZERO);
     const manaUsed = txs.reduce((acc, tx) => acc.add(new Fr(tx.gasUsed.billedGas.l2Gas)), Fr.ZERO);
 
     const header = new BlockHeader(previousArchive, contentCommitment, stateReference, globalVariables, fees, manaUsed);

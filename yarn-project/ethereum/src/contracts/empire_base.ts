@@ -1,11 +1,13 @@
+import type { EthAddress } from '@aztec/foundation/eth-address';
 import { Signature } from '@aztec/foundation/eth-signature';
 import { EmpireBaseAbi } from '@aztec/l1-artifacts/EmpireBaseAbi';
 
-import { type Hex, encodeFunctionData, hashTypedData } from 'viem';
+import { type Hex, type TypedDataDefinition, encodeFunctionData } from 'viem';
 
 import type { L1TxRequest } from '../l1_tx_utils.js';
 
 export interface IEmpireBase {
+  get address(): EthAddress;
   getRoundInfo(
     rollupAddress: Hex,
     round: bigint,
@@ -17,7 +19,7 @@ export interface IEmpireBase {
     round: bigint,
     chainId: number,
     signerAddress: Hex,
-    signer: (msg: Hex) => Promise<Hex>,
+    signer: (msg: TypedDataDefinition) => Promise<Hex>,
   ): Promise<L1TxRequest>;
 }
 
@@ -47,10 +49,10 @@ export function encodeSignalWithSignature(payload: Hex, signature: Signature) {
  * @returns The EIP-712 signature
  */
 export async function signSignalWithSig(
-  signer: (msg: Hex) => Promise<Hex>,
+  signer: (msg: TypedDataDefinition) => Promise<Hex>,
   payload: Hex,
-  nonce: bigint,
-  round: bigint,
+  slot: bigint,
+  instance: Hex,
   verifyingContract: Hex,
   chainId: number,
 ): Promise<Signature> {
@@ -62,19 +64,25 @@ export async function signSignalWithSig(
   };
 
   const types = {
+    EIP712Domain: [
+      { name: 'name', type: 'string' },
+      { name: 'version', type: 'string' },
+      { name: 'chainId', type: 'uint256' },
+      { name: 'verifyingContract', type: 'address' },
+    ],
     Signal: [
       { name: 'payload', type: 'address' },
-      { name: 'nonce', type: 'uint256' },
-      { name: 'round', type: 'uint256' },
+      { name: 'slot', type: 'uint256' },
+      { name: 'instance', type: 'address' },
     ],
   };
 
   const message = {
     payload,
-    nonce,
-    round,
+    slot,
+    instance,
   };
 
-  const msg = hashTypedData({ domain, types, primaryType: 'Signal', message });
-  return Signature.fromString(await signer(msg));
+  const typedData = { domain, types, primaryType: 'Signal', message };
+  return Signature.fromString(await signer(typedData));
 }

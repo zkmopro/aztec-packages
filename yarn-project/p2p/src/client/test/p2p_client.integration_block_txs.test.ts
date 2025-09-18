@@ -70,7 +70,7 @@ describe('p2p client integration block txs protocol ', () => {
       syncSummary: {
         latestBlockNumber: 0,
         latestBlockHash: '',
-        finalisedBlockNumber: 0,
+        finalizedBlockNumber: 0,
         treesAreSynched: false,
         oldestHistoricBlockNumber: 0,
       },
@@ -99,13 +99,13 @@ describe('p2p client integration block txs protocol ', () => {
   });
 
   afterEach(async () => {
-    jest.restoreAllMocks();
-    jest.resetAllMocks();
-    jest.clearAllMocks();
-
     logger.info(`Tearing down state for ${expect.getState().currentTestName}`);
     await shutdown(clients);
     logger.info('Shut down p2p clients');
+
+    jest.restoreAllMocks();
+    jest.resetAllMocks();
+    jest.clearAllMocks();
 
     clients = [];
   });

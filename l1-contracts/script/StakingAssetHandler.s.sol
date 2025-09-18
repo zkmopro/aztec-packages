@@ -11,8 +11,7 @@ import {IRollup} from "@aztec/core/interfaces/IRollup.sol";
 import {IRegistry} from "@aztec/governance/interfaces/IRegistry.sol";
 import {IValidatorSelection} from "@aztec/core/interfaces/IValidatorSelection.sol";
 import {IPayload} from "@aztec/governance/interfaces/IPayload.sol";
-import {RegisterNewRollupVersionPayload} from
-  "../test/governance/scenario/RegisterNewRollupVersionPayload.sol";
+import {RegisterNewRollupVersionPayload} from "../test/governance/scenario/RegisterNewRollupVersionPayload.sol";
 import {ProposalLib} from "@aztec/governance/libraries/ProposalLib.sol";
 import {Ownable} from "@oz/access/Ownable.sol";
 import {Fakerollup} from "../test/governance/governance-proposer/mocks/Fakerollup.sol";
@@ -25,16 +24,16 @@ import {ZKPassportVerifier} from "@zkpassport/ZKPassportVerifier.sol";
 contract StakingAssetHandlerScript is Test {
   address internal constant ME = address(0xf8d7d601759CBcfB78044bA7cA9B0c0D6301A54f);
 
-  string internal constant SCOPE = "testnet.aztec.network";
-  string internal constant SUBSCOPE = "personhood";
+  string internal constant DOMAIN = "testnet.aztec.network";
+  string internal constant SCOPE = "personhood";
 
   bytes32 public constant DEPOSIT_MERKLE_ROOT = bytes32(0);
 
   ZKPassportVerifier internal constant zkPassportVerifier =
-    ZKPassportVerifier(0xEE9F10f38319eAE2730dBa28fB09081dB806c5E5);
+    ZKPassportVerifier(0xBec82dec0747C9170D760D5aba9cc44929B17C05);
 
-  TestERC20 public constant stakingAsset = TestERC20(0x5C30c66847866A184ccb5197cBE31Fce7A92eB26);
-  IRegistry public constant registry = IRegistry(0x4d2cC1d5fb6BE65240e0bFC8154243e69c0Fb19E);
+  TestERC20 public constant stakingAsset = TestERC20(0xad6618B0f91d3fe156eF4CbEb08844C32954f089);
+  IRegistry public constant registry = IRegistry(0x2e48aDdcA360dA61e4d6C21ff2B1961Af56eB83b);
 
   function setUp() public {}
 
@@ -55,10 +54,10 @@ contract StakingAssetHandlerScript is Test {
       depositMerkleRoot: DEPOSIT_MERKLE_ROOT,
       zkPassportVerifier: zkPassportVerifier,
       unhinged: isUnhinged,
+      domain: DOMAIN,
       scope: SCOPE,
-      subscope: SUBSCOPE,
       skipBindCheck: false, // DO NOT: skip bind check
-      skipMerkleCheck: false // DO NOT: skip merkle check
+      skipMerkleCheck: true // DO: skip merkle check
     });
 
     vm.startBroadcast(ME);

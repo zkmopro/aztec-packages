@@ -142,18 +142,32 @@ export function formatHelpLine(
 
 const getDefaultOrEnvValue = (opt: AztecStartOption) => {
   let val;
-  // if the option is set in the environment, use that & parse it
-  if (opt.envVar && process.env[opt.envVar]) {
-    val = process.env[opt.envVar];
-    if (val && opt.parseVal) {
-      return opt.parseVal(val);
-    }
-    // if no env variable, use the default value
-  } else if (opt.defaultValue) {
-    val = opt.defaultValue;
+
+  // if the option is set in the environment, use that
+  if (opt.env) {
+    val = process.env[opt.env];
   }
 
-  return val;
+  // if we have fallback env vars, check those
+  if (!val && opt.fallback && opt.fallback.length > 0) {
+    for (const fallback of opt.fallback) {
+      val = process.env[fallback];
+      if (val) {
+        break;
+      }
+    }
+  }
+
+  // if we have a value, optionally parse it and return
+  if (val) {
+    if (opt.parseVal) {
+      return opt.parseVal(val);
+    }
+    return val;
+  } else if (opt.defaultValue !== undefined) {
+    return opt.defaultValue;
+  }
+  return undefined;
 };
 
 // Function to add options dynamically
@@ -161,7 +175,7 @@ export const addOptions = (cmd: Command, options: AztecStartOption[]) => {
   options.forEach(opt => {
     cmd.option(
       opt.flag,
-      `${opt.description} (default: ${opt.defaultValue}) ($${opt.envVar})`,
+      `${opt.description} (default: ${opt.defaultValue}) ($${opt.env})`,
       opt.parseVal ? opt.parseVal : val => val,
       getDefaultOrEnvValue(opt),
     );
@@ -177,10 +191,11 @@ export const printAztecStartHelpText = () => {
     helpTextLines.push('');
 
     aztecStartOptions[category].forEach(opt => {
-      const defaultValueText = opt.defaultValue
-        ? `(default: ${opt.printDefault ? opt.printDefault(opt.defaultValue) : opt.defaultValue})`
-        : '';
-      const envVarText = opt.envVar ? `($${opt.envVar})` : '';
+      const defaultValueText =
+        opt.defaultValue || (Array.isArray(opt.defaultValue) && opt.defaultValue.length > 0)
+          ? `(default: ${opt.printDefault ? opt.printDefault(opt.defaultValue) : opt.defaultValue})`
+          : '';
+      const envVarText = opt.env ? `($${opt.env})` : '';
       const flagText = `${opt.flag}`;
 
       const paddedText = formatHelpLine(flagText, defaultValueText, envVarText, maxFlagLength, maxDefaultLength);
