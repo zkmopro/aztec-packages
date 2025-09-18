@@ -1,5 +1,8 @@
 pub mod acir;
+pub mod aes;
 pub mod blake2s;
+pub mod ecdsa;
+pub mod grumpkin;
 pub mod models;
 pub mod pedersen;
 pub mod poseidon2;
@@ -47,6 +50,11 @@ impl Buffer {
         })
     }
 
+    /// Constructs a Buffer from raw data
+    pub fn from_data(data: Vec<u8>) -> Self {
+        Self { data }
+    }
+
     /// Returns a reference to the buffer's data as a slice.
     pub fn as_slice(&self) -> &[u8] {
         &self.data
@@ -73,6 +81,17 @@ pub unsafe fn parse_c_str(ptr: *const ::std::os::raw::c_char) -> Option<String> 
 }
 
 impl<T: SerializeBuffer> SerializeBuffer for &[T] {
+    fn to_buffer(&self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        buffer.extend_from_slice(&(self.len() as u32).to_be_bytes());
+        for elem in self.iter() {
+            buffer.extend_from_slice(&elem.to_buffer());
+        }
+        buffer
+    }
+}
+
+impl<T: SerializeBuffer> SerializeBuffer for Vec<T> {
     fn to_buffer(&self) -> Vec<u8> {
         let mut buffer = Vec::new();
         buffer.extend_from_slice(&(self.len() as u32).to_be_bytes());

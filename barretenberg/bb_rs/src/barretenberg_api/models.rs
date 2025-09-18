@@ -3,7 +3,7 @@ use std::ffi::c_void;
 
 pub type Ptr = *mut c_void;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Fr {
     pub data: [u8; 32],
 }
@@ -21,7 +21,7 @@ impl DeserializeBuffer for Fr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Fq {
     pub data: [u8; 32],
 }
@@ -39,7 +39,7 @@ impl DeserializeBuffer for Fq {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Point {
     pub x: Fr,
     pub y: Fr,
