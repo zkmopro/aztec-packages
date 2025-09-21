@@ -6,7 +6,7 @@ on:
       tag_name:
         description: 'Tag name for release'
         required: true
-        default: 'v1.0.0-nightly.20250723'
+        default: 'v1.0.0-nightly.20250921'
       ref_name:
         description: 'The ref name to build as'
         required: false
@@ -76,6 +76,13 @@ jobs:
           cp $BUILD_DIR/out/build/lib/libdeflate.a ./dist/${{ matrix.target }}/lib/
         elif [ -f "$BUILD_DIR/out/build/_deps/libdeflate-build/libdeflate.a" ]; then
           cp $BUILD_DIR/out/build/_deps/libdeflate-build/libdeflate.a ./dist/${{ matrix.target }}/lib/
+        fi
+
+        # Copy liblmdb if it exists
+        if [ -f "$BUILD_DIR/out/build/lib/liblmdb.a" ]; then
+          cp $BUILD_DIR/out/build/lib/liblmdb.a ./dist/${{ matrix.target }}/lib/
+        elif [ -f "$BUILD_DIR/out/build/_deps/lmdb/src/lmdb_repo/libraries/liblmdb/liblmdb.a" ]; then
+          cp $BUILD_DIR/out/build/_deps/lmdb/src/lmdb_repo/libraries/liblmdb/liblmdb.a ./dist/${{ matrix.target }}/lib/
         fi
 
         # Copy all header files from the include directory
