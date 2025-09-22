@@ -71,11 +71,19 @@ jobs:
         # Set HOST_TAG for Android NDK
         HOST_TAG=$(ls $HOME/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt)
         echo "HOST_TAG=$HOST_TAG" >> $GITHUB_ENV
+        # Set additional Android NDK environment variables for CMake
+        echo "ANDROID_NDK=$HOME/Library/Android/sdk/ndk/26.1.10909125" >> $GITHUB_ENV
+        echo "ANDROID_HOST_TAG=$HOST_TAG" >> $GITHUB_ENV
 
     - name: Build Rust Library for Android
       working-directory: barretenberg/bb_rs
       run: |
-        HOST_TAG=$HOST_TAG ANDROID_HOME="$HOME/Library/Android/sdk" NDK_VERSION="26.1.10909125" cargo build -vvvv --target ${{ matrix.target }} --release
+        ANDROID_NDK="$HOME/Library/Android/sdk/ndk/26.1.10909125" \
+        ANDROID_HOST_TAG=$HOST_TAG \
+        HOST_TAG=$HOST_TAG \
+        ANDROID_HOME="$HOME/Library/Android/sdk" \
+        NDK_VERSION="26.1.10909125" \
+        cargo build -vvvv --target ${{ matrix.target }} --release
 
     - name: Package Android Rust Library Artifact
       working-directory: barretenberg/bb_rs
