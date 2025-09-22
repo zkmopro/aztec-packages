@@ -78,6 +78,13 @@ jobs:
           cp $BUILD_DIR/out/build/_deps/libdeflate-build/libdeflate.a ./dist/${{ matrix.target }}/lib/
         fi
 
+        # Copy liblmdb if it exists
+        if [ -f "$BUILD_DIR/out/build/lib/liblmdb.a" ]; then
+          cp $BUILD_DIR/out/build/lib/liblmdb.a ./dist/${{ matrix.target }}/lib/
+        elif [ -f "$BUILD_DIR/out/build/_deps/lmdb/src/lmdb_repo/libraries/liblmdb/liblmdb.a" ]; then
+          cp $BUILD_DIR/out/build/_deps/lmdb/src/lmdb_repo/libraries/liblmdb/liblmdb.a ./dist/${{ matrix.target }}/lib/
+        fi
+
         # Copy all header files from the include directory
         cp -r $BUILD_DIR/out/build/include ./dist/${{ matrix.target }}/
 
