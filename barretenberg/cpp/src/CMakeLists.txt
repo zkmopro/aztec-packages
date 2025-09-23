@@ -30,6 +30,9 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         add_compile_options(-Wno-missing-field-initializers)
         # CLI11.hpp
         add_compile_options(-Wno-deprecated-declarations)
+    else()
+        # For older Clang versions, also suppress VLA warnings to maintain compatibility
+        add_compile_options(-Wno-vla-extension)
     endif()
 endif()
 
