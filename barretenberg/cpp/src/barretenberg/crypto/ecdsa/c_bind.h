@@ -5,8 +5,8 @@
 // =====================
 
 #include "barretenberg/common/wasm_export.hpp"
-#include <ecc/curves/secp256k1/secp256k1.hpp>
-#include <ecc/curves/secp256r1/secp256r1.hpp>
+#include <barretenberg/ecc/curves/secp256k1/secp256k1.hpp>
+#include <barretenberg/ecc/curves/secp256r1/secp256r1.hpp>
 
 // secp256k1 curve
 

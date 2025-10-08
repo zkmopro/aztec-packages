@@ -166,7 +166,9 @@ fn main() {
             &format!("-I{}/build/_deps/msgpack-c/src/msgpack-c/include", dst.display()),
             //&format!("-I{}/build/_deps/libdeflate-src", dst.display()),
             "-I/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/usr/include/c++/v1",
-            "-I/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/usr/include"
+            "-I/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/usr/include",
+            "-target", "arm64-apple-ios15.0",
+            "--sysroot=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"
         ]);
     } else if target_os == "macos" {
         builder = builder
