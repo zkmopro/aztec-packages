@@ -1,5 +1,6 @@
 pub mod acir;
 pub mod aes;
+pub mod bbapi;
 pub mod blake2s;
 pub mod ecdsa;
 pub mod grumpkin;

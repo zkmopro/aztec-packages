@@ -118,6 +118,9 @@ fn main() {
     // Link the `barretenberg` static library.
     println!("cargo:rustc-link-lib=static=barretenberg");
 
+    // Link the `env` static library
+    println!("cargo:rustc-link-lib=static=env");
+
     // Link the `libdeflate` static library.
     println!("cargo:rustc-link-lib=static=deflate");
 
@@ -212,6 +215,7 @@ fn main() {
                 #include <barretenberg/srs/c_bind.hpp>
                 #include <barretenberg/common/c_bind.hpp>
                 #include <barretenberg/dsl/acir_proofs/c_bind.hpp>
+                #include <barretenberg/bbapi/c_bind.hpp>
                 
                 // Grumpkin function declarations (no header file exists)
                 extern "C" {
@@ -289,6 +293,7 @@ fn main() {
         .allowlist_function("acir_vk_as_fields_ultra_honk")
         .allowlist_function("acir_vk_as_fields_mega_honk")
         // Tell cargo to invalidate the built crate whenever any of the included header files changed.
+        .allowlist_function("bbapi")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         // Finish the builder and generate the bindings.
         .generate()

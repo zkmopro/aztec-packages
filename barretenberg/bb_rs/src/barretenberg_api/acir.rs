@@ -67,8 +67,10 @@ pub unsafe fn acir_prove_ultra_honk(
     witness_buf: &[u8],
     vkey_buf: &[u8],
     slow_low_memory: bool,
+    max_storage_usage: Option<u64>,
 ) -> Vec<u8> {
     acir_set_slow_low_memory(slow_low_memory);
+    acir_set_storage_budget(max_storage_usage.unwrap_or(0));
 
     let mut out_ptr = ptr::null_mut();
     bindgen::acir_prove_ultra_zk_honk(
@@ -93,8 +95,10 @@ pub unsafe fn acir_prove_ultra_keccak_honk(
     witness_buf: &[u8],
     vkey_buf: &[u8],
     slow_low_memory: bool,
+    max_storage_usage: Option<u64>,
 ) -> Vec<u8> {
     acir_set_slow_low_memory(slow_low_memory);
+    acir_set_storage_budget(max_storage_usage.unwrap_or(0));
 
     let mut out_ptr = ptr::null_mut();
     bindgen::acir_prove_ultra_keccak_honk(
@@ -119,8 +123,10 @@ pub unsafe fn acir_prove_ultra_keccak_zk_honk(
     witness_buf: &[u8],
     vkey_buf: &[u8],
     slow_low_memory: bool,
+    max_storage_usage: Option<u64>,
 ) -> Vec<u8> {
     acir_set_slow_low_memory(slow_low_memory);
+    acir_set_storage_budget(max_storage_usage.unwrap_or(0));
 
     let mut out_ptr = ptr::null_mut();
     bindgen::acir_prove_ultra_keccak_zk_honk(
@@ -293,4 +299,27 @@ pub fn acir_get_slow_low_memory() -> bool {
     env::var("BB_SLOW_LOW_MEMORY").map_or(false, |val| val == "1")
 }
 
+pub fn acir_set_storage_budget(max_bytes: u64) {
+    if max_bytes == 0 {
+        env::remove_var("BB_STORAGE_BUDGET");
+        return;
+    }
+
+    if max_bytes < 1024 {
+        env::set_var("BB_STORAGE_BUDGET", max_bytes.to_string());
+    } else if max_bytes < 1024 * 1024 {
+        let formatted_max_bytes = format!("{}k", max_bytes / 1024);
+        env::set_var("BB_STORAGE_BUDGET", formatted_max_bytes);
+    } else if max_bytes < 1024 * 1024 * 1024 {
+        let formatted_max_bytes = format!("{}m", max_bytes / 1024 / 1024);
+        env::set_var("BB_STORAGE_BUDGET", formatted_max_bytes);
+    } else {
+        let formatted_max_bytes = format!("{}g", max_bytes / 1024 / 1024 / 1024);
+        env::set_var("BB_STORAGE_BUDGET", formatted_max_bytes);
+    }
+}
+
+pub fn acir_set_storage_budget_from_string(budget_str: &str) {
+    env::set_var("BB_STORAGE_BUDGET", budget_str);
+}
 
