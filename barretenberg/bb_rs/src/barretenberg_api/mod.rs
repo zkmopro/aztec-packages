@@ -2,12 +2,14 @@ pub mod acir;
 pub mod aes;
 pub mod bbapi;
 pub mod blake2s;
+pub mod bn254;
 pub mod ecdsa;
 pub mod grumpkin;
 pub mod models;
 pub mod pedersen;
 pub mod poseidon2;
 pub mod schnorr;
+pub mod secp256k1;
 pub mod srs;
 pub mod traits;
 

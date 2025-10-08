@@ -4,51 +4,20 @@ use super::{
 };
 use std::ptr;
 
-/// Apply PKCS#7 padding to input data
-fn apply_pkcs7_padding(input: &[u8]) -> Vec<u8> {
-    let block_size = 16;
-    let padding_len = block_size - (input.len() % block_size);
-    let mut padded = input.to_vec();
-    padded.extend(vec![padding_len as u8; padding_len]);
-    padded
-}
-
-/// Remove PKCS#7 padding from decrypted data
-fn remove_pkcs7_padding(data: &[u8]) -> Result<Vec<u8>, &'static str> {
-    if data.is_empty() {
-        return Err("Empty data");
-    }
-    
-    let padding_len = data[data.len() - 1] as usize;
-    if padding_len == 0 || padding_len > 16 {
-        return Err("Invalid padding");
-    }
-    
-    if data.len() < padding_len {
-        return Err("Data too short for padding");
-    }
-    
-    // Verify all padding bytes are correct
-    for i in 0..padding_len {
-        if data[data.len() - 1 - i] != padding_len as u8 {
-            return Err("Invalid padding bytes");
-        }
-    }
-    
-    Ok(data[..data.len() - padding_len].to_vec())
-}
-
 /// AES-128 CBC encryption
+/// Expects input to be already padded (PKCS#7 padding should be applied at the TypeScript layer)
 pub unsafe fn aes_encrypt_buffer_cbc(
     input: &[u8],
     iv: &[u8; 16],
     key: &[u8; 16],
 ) -> Buffer {
-    // Apply PKCS#7 padding
-    let padded_input = apply_pkcs7_padding(input);
+    // Verify input is properly padded (must be multiple of 16 bytes)
+    if input.len() % 16 != 0 {
+        panic!("Input length must be a multiple of 16 bytes (pre-padded), got: {}", input.len());
+    }
     
     // Create mutable copies since the C++ function modifies both input and IV in-place
-    let mut input_copy = padded_input;
+    let mut input_copy = input.to_vec();
     let mut iv_copy = *iv;
     
     // Convert to network byte order as expected by the C++ function
@@ -80,6 +49,7 @@ pub unsafe fn aes_encrypt_buffer_cbc(
 }
 
 /// AES-128 CBC decryption
+/// Returns the decrypted data with padding intact (padding removal should be handled at the TypeScript layer)
 pub unsafe fn aes_decrypt_buffer_cbc(
     input: &[u8],
     iv: &[u8; 16],
@@ -117,10 +87,7 @@ pub unsafe fn aes_decrypt_buffer_cbc(
     
     let actual_decrypted_data = &buffer_data[4..];
     
-    // Remove PKCS#7 padding
-    let unpadded_data = remove_pkcs7_padding(actual_decrypted_data)
-        .expect("Failed to remove padding");
-    
-    // Create a new buffer with the unpadded data
-    Buffer::from_data(unpadded_data)
+    // Return the decrypted data with padding intact
+    // Padding removal should be handled at the TypeScript layer
+    Buffer::from_data(actual_decrypted_data.to_vec())
 }
