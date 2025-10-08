@@ -305,7 +305,12 @@ pub fn acir_set_storage_budget(max_bytes: u64) {
         return;
     }
 
-    if max_bytes < 1024 {
+    // Use the max bytes directly for better precision
+    env::set_var("BB_STORAGE_BUDGET", max_bytes.to_string());
+
+    // This could be a way to do it, but it's not as precise
+    // as the rounding gets too rough in the gigabytes
+    /*if max_bytes < 1024 {
         env::set_var("BB_STORAGE_BUDGET", max_bytes.to_string());
     } else if max_bytes < 1024 * 1024 {
         let formatted_max_bytes = format!("{}k", max_bytes / 1024);
@@ -316,7 +321,7 @@ pub fn acir_set_storage_budget(max_bytes: u64) {
     } else {
         let formatted_max_bytes = format!("{}g", max_bytes / 1024 / 1024 / 1024);
         env::set_var("BB_STORAGE_BUDGET", formatted_max_bytes);
-    }
+    }*/
 }
 
 pub fn acir_set_storage_budget_from_string(budget_str: &str) {
