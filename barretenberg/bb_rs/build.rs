@@ -299,9 +299,6 @@ fn main() {
         //.allowlist_function("acir_write_vk_ultra_starknet_honk")
         //.allowlist_function("acir_write_vk_ultra_starknet_zk_honk")
         .allowlist_function("acir_prove_and_verify_ultra_honk")
-        .allowlist_function("acir_proof_as_fields_ultra_honk")
-        .allowlist_function("acir_vk_as_fields_ultra_honk")
-        .allowlist_function("acir_vk_as_fields_mega_honk")
         // Tell cargo to invalidate the built crate whenever any of the included header files changed.
         .allowlist_function("bbapi")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
