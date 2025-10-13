@@ -10,18 +10,18 @@ use std::process::Command;
 /// rather than trying to patch for it in the C++ code.
 fn fix_duplicate_bindings(bindings_file: &PathBuf) {
     println!("cargo:warning=Fixing duplicate type definitions in bindings...");
-    
+
     let scripts_dir = PathBuf::from("scripts");
     let python_script = scripts_dir.join("fix_bindings.py");
     let shell_script = scripts_dir.join("fix_bindings.sh");
-    
+
     // Try Python script first
     if python_script.exists() {
         let output = Command::new("python3")
             .arg(&python_script)
             .arg(bindings_file)
             .output();
-            
+
         match output {
             Ok(result) => {
                 if result.status.success() {
@@ -36,14 +36,14 @@ fn fix_duplicate_bindings(bindings_file: &PathBuf) {
             }
         }
     }
-    
+
     // Fallback to shell script
     if shell_script.exists() {
         let output = Command::new("bash")
             .arg(&shell_script)
             .arg(bindings_file)
             .output();
-            
+
         match output {
             Ok(result) => {
                 if result.status.success() {
@@ -69,16 +69,37 @@ fn main() {
     // cfg!(target_os = "<os>") does not work so we get the value
     // of the target_os environment variable to determine the target OS.
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap().to_string();
+    let target = env::var("TARGET").unwrap();
 
     // Build the C++ code using CMake and get the build directory path.
+    // Supported platforms (aligned with C++ CMake build system):
+    // - iOS: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios, x86_64-apple-ios-sim
+    // - Android: aarch64-linux-android, x86_64-linux-android
+    // - macOS: aarch64-apple-darwin, x86_64-apple-darwin
+    // - Linux: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu
+    // - WASM: wasm32-wasi, wasm32-wasip1-threads
     let dst;
     // iOS
     if target_os == "ios" {
+        // Set iOS specific variables
+        let platform = if target.contains("sim") {
+            if target_arch == "aarch64" {
+                "SIMULATORARM64"
+            } else {
+                "SIMULATOR64"
+            }
+        } else {
+            "OS64"
+        };
+
+        let deployment_target = env::var("IPHONEOS_DEPLOYMENT_TARGET").unwrap_or_else(|_| "15.0".to_string());
+
         dst = Config::new("../cpp")
             .generator("Ninja")
             .configure_arg("-DCMAKE_BUILD_TYPE=Release")
-            .configure_arg("-DPLATFORM=OS64")
-            .configure_arg("-DDEPLOYMENT_TARGET=15.0")
+            .configure_arg(&format!("-DPLATFORM={}", platform))
+            .configure_arg(&format!("-DDEPLOYMENT_TARGET={}", deployment_target))
             .configure_arg("--toolchain=../bb_rs/ios.toolchain.cmake")
             .configure_arg("-DTRACY_ENABLE=OFF")
             .build_target("bb")
@@ -89,24 +110,124 @@ fn main() {
         let android_home = option_env!("ANDROID_HOME").expect("ANDROID_HOME not set");
         let ndk_version = option_env!("NDK_VERSION").expect("NDK_VERSION not set");
 
-        dst = Config::new("../cpp")
-        .generator("Ninja")
-        .configure_arg("-DCMAKE_BUILD_TYPE=Release")
-        .configure_arg("-DANDROID_ABI=arm64-v8a")
-        .configure_arg("-DANDROID_PLATFORM=android-33")
-        .configure_arg(&format!("--toolchain={}/ndk/{}/build/cmake/android.toolchain.cmake", android_home, ndk_version))
-        .configure_arg("-DTRACY_ENABLE=OFF")
-        .build_target("bb")
-        .build();
+        dst = match target_arch.as_str() {
+            "aarch64" => Config::new("../cpp")
+                .generator("Ninja")
+                .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                .configure_arg("-DANDROID_ABI=arm64-v8a")
+                .configure_arg("-DANDROID_PLATFORM=android-33")
+                .configure_arg(&format!(
+                    "--toolchain={}/ndk/{}/build/cmake/android.toolchain.cmake",
+                    android_home, ndk_version
+                ))
+                .configure_arg("-DTRACY_ENABLE=OFF")
+                .build_target("bb")
+                .build(),
+            "x86_64" => Config::new("../cpp")
+                .generator("Ninja")
+                .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                .configure_arg("-DANDROID_ABI=x86_64")
+                .configure_arg("-DANDROID_PLATFORM=android-33")
+                .configure_arg(&format!(
+                    "--toolchain={}/ndk/{}/build/cmake/android.toolchain.cmake",
+                    android_home, ndk_version
+                ))
+                .configure_arg("-DTRACY_ENABLE=OFF")
+                .define("TARGET_ARCH", "skylake")
+                .build_target("bb")
+                .build(),
+            _ => panic!("Unsupported Android target_arch: {}", target_arch),
+        }
     }
-    // MacOS and other platforms
+    // MacOS
+    else if target_os == "macos" {
+        dst = match target_arch.as_str() {
+            "aarch64" => {
+                Config::new("../cpp")
+                    .generator("Ninja")
+                    .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                    .configure_arg("-DTRACY_ENABLE=OFF")
+                    .build_target("bb")
+                    .build()
+            }
+            "x86_64" => {
+                Config::new("../cpp")
+                    .generator("Ninja")
+                    .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                    .configure_arg("-DTRACY_ENABLE=OFF")
+                    .define("TARGET_ARCH", "skylake")
+                    .build_target("bb")
+                    .build()
+            }
+            _ => panic!("Unsupported os and target_arch: {} {}", target_os, target_arch),
+        }
+    }
+    // Linux
+    else if target_os == "linux" {
+        dst = match target_arch.as_str() {
+            // x86_64-unknown-linux-gnu
+            "x86_64" => {
+                 Config::new("../cpp")
+                    .generator("Ninja")
+                    .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                    .configure_arg("-DTRACY_ENABLE=OFF")
+                    .define("TARGET_ARCH", "skylake")
+                    .build_target("bb")
+                    .build()
+            }
+            // aarch64-unknown-linux-gnu (ARM64 Linux)
+            "aarch64" => {
+                Config::new("../cpp")
+                    .generator("Ninja")
+                    .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+                    .configure_arg("-DTRACY_ENABLE=OFF")
+                    .build_target("bb")
+                    .build()
+            }
+            _ => panic!("Unsupported os and target_arch: {} {}", target_os, target_arch),
+        }
+    }
+    // WASM
+    else if target_os == "wasi" {
+        let wasi_sdk_prefix = env::var("WASI_SDK_PREFIX")
+            .unwrap_or_else(|_| "/opt/wasi-sdk".to_string());
+
+        let mut config = Config::new("../cpp");
+        config
+            .generator("Ninja")
+            .configure_arg("-DCMAKE_BUILD_TYPE=Release")
+            .configure_arg(&format!("--toolchain=../cpp/cmake/toolchains/wasm32-wasi.cmake"))
+            .configure_arg(&format!("-DCMAKE_SYSROOT={}/share/wasi-sysroot", wasi_sdk_prefix))
+            .configure_arg("-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER")
+            .configure_arg("-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY")
+            .configure_arg("-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY")
+            .configure_arg("-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY")
+            .configure_arg("-DCMAKE_C_COMPILER_WORKS=ON")
+            .configure_arg("-DCMAKE_CXX_COMPILER_WORKS=ON")
+            .configure_arg("-DDISABLE_AZTEC_VM=ON")
+            .configure_arg("-DTRACY_ENABLE=OFF")
+            .define("CMAKE_CXX_FLAGS", "-DBB_NO_EXCEPTIONS")
+            .env("WASI_SDK_PREFIX", &wasi_sdk_prefix)
+            .env("CC", format!("{}/bin/clang", wasi_sdk_prefix))
+            .env("CXX", format!("{}/bin/clang++", wasi_sdk_prefix))
+            .env("AR", format!("{}/bin/llvm-ar", wasi_sdk_prefix))
+            .env("RANLIB", format!("{}/bin/llvm-ranlib", wasi_sdk_prefix))
+            .build_target("bb");
+
+        // Check if multithreading is requested via target features
+        // wasm32-wasip1-threads enables multithreading
+        let target = env::var("TARGET").unwrap_or_default();
+        if target.contains("threads") {
+            config.configure_arg("-DMULTITHREADING=ON");
+        } else {
+            config.configure_arg("-DMULTITHREADING=OFF");
+        }
+
+        dst = config.build();
+    }
+    // Other platforms
     else {
-        dst = Config::new("../cpp")
-        .generator("Ninja")
-        .configure_arg("-DCMAKE_BUILD_TYPE=Release")            
-        .configure_arg("-DTRACY_ENABLE=OFF")
-        .build_target("bb")
-        .build();
+        panic!("Unsupported target: {}", target);
     }
 
     // Add the library search path for Rust to find during linking.
@@ -150,7 +271,6 @@ fn main() {
             &format!("-I{}/build/include", dst.display()),
             // Dependencies' include paths needs to be added manually.
             &format!("-I{}/build/_deps/msgpack-c/src/msgpack-c/include", dst.display()),
-            //&format!("-I{}/build/_deps/libdeflate-src", dst.display()),
             &format!("-I{}/ndk/{}/toolchains/llvm/prebuilt/{}/sysroot/usr/include/c++/v1", android_home, ndk_version, host_tag),
             &format!("-I{}/ndk/{}/toolchains/llvm/prebuilt/{}/sysroot/usr/include", android_home, ndk_version, host_tag),
             &format!("-I{}/ndk/{}/toolchains/llvm/prebuilt/{}/sysroot/usr/include/aarch64-linux-android", android_home, ndk_version, host_tag)
@@ -167,7 +287,6 @@ fn main() {
             //&format!("-I{}/build/_deps/libdeflate-src", dst.display()),
             "-I/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/usr/include/c++/v1",
             "-I/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/usr/include",
-            "-target", "arm64-apple-ios15.0",
             "--sysroot=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"
         ]);
     } else if target_os == "macos" {
@@ -186,20 +305,40 @@ fn main() {
                 "-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include",
                 // Fix for macOS system type issues
                 "-D_LIBCPP_DISABLE_AVAILABILITY",
-                "-target", "arm64-apple-macosx15.0",
                 "--sysroot=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
             ]);
-    } else {
+    } else if target_os == "wasi" {
+        let wasi_sdk_prefix = env::var("WASI_SDK_PREFIX")
+            .unwrap_or_else(|_| "/opt/wasi-sdk".to_string());
+
         builder = builder
-        // Add the include path for headers.
-        .clang_args([
-            "-std=c++20",
-            "-xc++",
-            &format!("-I{}/build/include", dst.display()),
-            // Dependencies' include paths needs to be added manually.
-            &format!("-I{}/build/_deps/msgpack-c/src/msgpack-c/include", dst.display()),
-            //&format!("-I{}/build/_deps/libdeflate-src", dst.display()),
-        ]);
+            // Add the include path for headers.
+            .clang_args([
+                "-std=c++20",
+                "-xc++",
+                &format!("-I{}/build/include", dst.display()),
+                // Dependencies' include paths needs to be added manually.
+                &format!("-I{}/build/_deps/msgpack-c/src/msgpack-c/include", dst.display()),
+                // WASI sysroot includes
+                &format!("--sysroot={}/share/wasi-sysroot", wasi_sdk_prefix),
+                &format!("-I{}/share/wasi-sysroot/include/c++/v1", wasi_sdk_prefix),
+                &format!("-I{}/share/wasi-sysroot/include", wasi_sdk_prefix),
+                // WASM-specific flags
+                "-D_WASI_EMULATED_PROCESS_CLOCKS=1",
+                "-DBB_NO_EXCEPTIONS",
+            ]);
+    } else {
+        // Default Linux (x86_64 and aarch64)
+        builder = builder
+            // Add the include path for headers.
+            .clang_args([
+                "-std=c++20",
+                "-xc++",
+                &format!("-I{}/build/include", dst.display()),
+                // Dependencies' include paths needs to be added manually.
+                &format!("-I{}/build/_deps/msgpack-c/src/msgpack-c/include", dst.display()),
+                //&format!("-I{}/build/_deps/libdeflate-src", dst.display()),
+            ]);
     }
 
     let bindings = builder
