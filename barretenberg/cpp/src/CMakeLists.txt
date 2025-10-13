@@ -20,6 +20,26 @@ add_compile_options(-Wno-missing-braces)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-fcolor-diagnostics -fconstexpr-steps=100000000)
 
+    # Handle the template keyword diagnostic for different Clang versions
+    # This is needed for C++20 code compatibility with older Clang versions
+    include(CheckCXXCompilerFlag)
+
+    # Check if the compiler supports the specific flag
+    # We need to be careful here as the Android NDK's Clang may not have this flag
+    CHECK_CXX_COMPILER_FLAG("-Wno-missing-template-arg-list-after-template-kw" HAS_TEMPLATE_WARNING_FLAG)
+
+    if(HAS_TEMPLATE_WARNING_FLAG)
+        # Modern Clang that supports this flag
+        add_compile_options(-Wno-missing-template-arg-list-after-template-kw)
+    else()
+        # For older Clang or Android NDK that doesn't support the flag
+        # Check for alternative flags that achieve similar results
+        CHECK_CXX_COMPILER_FLAG("-Wno-c++11-extensions" HAS_CXX11_EXTENSIONS_FLAG)
+        if(HAS_CXX11_EXTENSIONS_FLAG)
+            add_compile_options(-Wno-c++11-extensions)
+        endif()
+    endif()
+
     if(MEMORY_CHECKS)
         message(STATUS "Compiling with memory checks.")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
