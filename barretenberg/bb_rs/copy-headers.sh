@@ -22,10 +22,10 @@ fi
 # Create the destination directory if it doesn't exist
 mkdir -p "$DEST_DIR"
 
-# Find all .hpp and .tcc files in the source directory and copy them to the destination,
+# Find all .hpp, .h, and .tcc files in the source directory and copy them to the destination,
 # preserving the directory structure
-echo "Copying .hpp and .tcc files from $SRC_DIR to $DEST_DIR..."
-find "$SRC_DIR" \( -name "*.hpp" -o -name "*.tcc" \) -type f | while read -r file; do
+echo "Copying .hpp, .h, and .tcc files from $SRC_DIR to $DEST_DIR..."
+find "$SRC_DIR" \( -name "*.hpp" -o -name "*.h" -o -name "*.tcc" \) -type f | while read -r file; do
     # Get the relative path from the source directory
     rel_path="${file#$SRC_DIR/}"
 
@@ -39,4 +39,4 @@ find "$SRC_DIR" \( -name "*.hpp" -o -name "*.tcc" \) -type f | while read -r fil
     echo "Copied: $rel_path"
 done
 
-echo "Finished copying .hpp and .tcc files to $DEST_DIR"
+echo "Finished copying .hpp, .h, and .tcc files to $DEST_DIR"

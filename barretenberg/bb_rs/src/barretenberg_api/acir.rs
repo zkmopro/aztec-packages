@@ -263,6 +263,24 @@ pub unsafe fn acir_proof_as_fields_ultra_honk(proof_buf: &[u8]) -> Vec<String> {
     from_biguints_to_hex_strings(&pack_proof_into_biguints(&proof_buf))
 }
 
+pub unsafe fn acir_vk_as_fields_ultra_honk(vk_buf: &[u8]) -> Vec<u8> {
+    let mut out_ptr = ptr::null_mut();
+    bindgen::acir_vk_as_fields_ultra_honk(
+        vk_buf.as_ptr(),
+        &mut out_ptr,
+    );
+    Buffer::from_ptr(out_ptr).unwrap().to_vec()
+}
+
+pub unsafe fn acir_vk_as_fields_mega_honk(vk_buf: &[u8]) -> Vec<u8> {
+    let mut out_ptr = ptr::null_mut();
+    bindgen::acir_vk_as_fields_mega_honk(
+        vk_buf.as_ptr(),
+        &mut out_ptr,
+    );
+    Buffer::from_ptr(out_ptr).unwrap().to_vec()
+}
+
 pub fn acir_set_slow_low_memory(enabled: bool) {
     if enabled {
         env::set_var("BB_SLOW_LOW_MEMORY", "1");
@@ -275,6 +293,4 @@ pub fn acir_get_slow_low_memory() -> bool {
     env::var("BB_SLOW_LOW_MEMORY").map_or(false, |val| val == "1")
 }
 
-/*pub unsafe fn acir_vk_as_fields_ultra_honk(vk_buf: &[u8]) -> Vec<String> {
-    from_biguints_to_hex_strings(&pack_vk_into_biguints(&vk_buf))
-}*/
+
