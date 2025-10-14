@@ -1,0 +1,95 @@
+name: Build and Publish bb_rs macOS Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for release'
+        required: true
+        default: 'v1.0.0-nightly.20250723'
+      ref_name:
+        description: 'The ref name to build as'
+        required: false
+  workflow_call:
+    inputs:
+      tag_name:
+        description: 'Tag name for release'
+        required: true
+        type: string
+      ref_name:
+        description: 'The ref name to build as'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  build-macos:
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+          - target: x86_64-apple-darwin
+            runner: macos-13
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.tag_name || github.sha }}
+        submodules: recursive
+
+    - name: Set up macOS Environment
+      run: |
+        # Install Rust 1.89.0 and macOS target
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.89.0
+        source $HOME/.cargo/env
+        # Add cargo bin to PATH for subsequent steps
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        rustup target add ${{ matrix.target }}
+        # Install ninja build system
+        brew install ninja
+
+    - name: Build Rust Library for macOS
+      working-directory: barretenberg/bb_rs
+      run: |
+        cargo build -vvvv --target ${{ matrix.target }} --release
+
+    - name: Package macOS Rust Library Artifact
+      working-directory: barretenberg/bb_rs
+      run: |
+        mkdir -p dist/${{ matrix.target }}/lib
+        # Find the build directory (it has a hash in the name)
+        BUILD_DIR=$(find target/${{ matrix.target }}/release/build -name "bb_rs-*" -type d | head -1)
+
+        # Copy the C++ static library (libbarretenberg.a) into lib directory
+        cp $BUILD_DIR/out/build/lib/libbarretenberg.a ./dist/${{ matrix.target }}/lib/
+
+        # Copy libdeflate if it exists
+        if [ -f "$BUILD_DIR/out/build/lib/libdeflate.a" ]; then
+          cp $BUILD_DIR/out/build/lib/libdeflate.a ./dist/${{ matrix.target }}/lib/
+        elif [ -f "$BUILD_DIR/out/build/_deps/libdeflate-build/libdeflate.a" ]; then
+          cp $BUILD_DIR/out/build/_deps/libdeflate-build/libdeflate.a ./dist/${{ matrix.target }}/lib/
+        fi
+
+        # Copy all header files from the include directory
+        cp -r $BUILD_DIR/out/build/include ./dist/${{ matrix.target }}/
+
+        # Create the tar.gz archive
+        cd dist && 7z a -ttar -so -an ${{ matrix.target }} | 7z a -si ../bb_rs-${{ matrix.target }}.tar.gz
+
+        # Verify the contents
+        echo "Contents of bb_rs-${{ matrix.target }}.tar.gz:"
+        tar -tzf ../bb_rs-${{ matrix.target }}.tar.gz
+
+    - name: Upload Library Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: bb_rs-${{ matrix.target }}.tar.gz
+        path: ./barretenberg/bb_rs/bb_rs-${{ matrix.target }}.tar.gz
+        retention-days: 3

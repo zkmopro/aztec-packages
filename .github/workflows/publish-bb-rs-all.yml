@@ -1,0 +1,244 @@
+name: Publish and Release bb_rs for Mobile Targets
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+*"
+  workflow_dispatch:
+    # Allow pushing a manual nightly release
+    inputs:
+      ref_name:
+        description: The ref name to build as. Useful for hotfixing a release.
+        required: false
+      tag:
+        description: The tag to build from (leave empty to build a nightly release from master)
+        required: false
+      publish:
+        description: Whether to publish the build artifacts
+        type: boolean
+        default: false
+      platforms:
+        description: Platforms to build (comma-separated, e.g. "ios,android,macos,linux" or "all")
+        required: false
+        default: "all"
+  # schedule:
+  #   # Run a nightly release at 2 AM UTC
+  #   - cron: "0 2 * * *"
+
+permissions:
+  # Necessary to upload new release artifacts
+  contents: write
+  issues: write
+
+jobs:
+  determine-platforms:
+    runs-on: ubuntu-latest
+    outputs:
+      build_ios: ${{ steps.platforms.outputs.build_ios }}
+      build_android: ${{ steps.platforms.outputs.build_android }}
+      build_macos: ${{ steps.platforms.outputs.build_macos }}
+      build_linux: ${{ steps.platforms.outputs.build_linux }}
+      tag_name: ${{ steps.tag.outputs.tag_name }}
+    steps:
+      - name: Determine tag name
+        id: tag
+        run: |
+          if [ "${{ github.event.inputs.tag }}" != "" ]; then
+            echo "tag_name=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.inputs.ref_name }}" != "" ]; then
+            echo "tag_name=${{ github.event.inputs.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine platforms to build
+        id: platforms
+        run: |
+          PLATFORMS="${{ github.event.inputs.platforms || 'all' }}"
+
+          if [ "$PLATFORMS" == "all" ]; then
+            echo "build_ios=true" >> $GITHUB_OUTPUT
+            echo "build_android=true" >> $GITHUB_OUTPUT
+            echo "build_macos=true" >> $GITHUB_OUTPUT
+            echo "build_linux=true" >> $GITHUB_OUTPUT
+          else
+            # Parse comma-separated platforms
+            if echo "$PLATFORMS" | grep -q "ios"; then
+              echo "build_ios=true" >> $GITHUB_OUTPUT
+            else
+              echo "build_ios=false" >> $GITHUB_OUTPUT
+            fi
+
+            if echo "$PLATFORMS" | grep -q "android"; then
+              echo "build_android=true" >> $GITHUB_OUTPUT
+            else
+              echo "build_android=false" >> $GITHUB_OUTPUT
+            fi
+
+            if echo "$PLATFORMS" | grep -q "macos"; then
+              echo "build_macos=true" >> $GITHUB_OUTPUT
+            else
+              echo "build_macos=false" >> $GITHUB_OUTPUT
+            fi
+
+            if echo "$PLATFORMS" | grep -q "linux"; then
+              echo "build_linux=true" >> $GITHUB_OUTPUT
+            else
+              echo "build_linux=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  build-ios:
+    needs: determine-platforms
+    if: needs.determine-platforms.outputs.build_ios == 'true'
+    uses: ./.github/workflows/publish-bb-rs-ios.yml
+    with:
+      tag_name: ${{ needs.determine-platforms.outputs.tag_name }}
+      ref_name: ${{ github.event.inputs.ref_name || github.sha }}
+    secrets: inherit
+
+  build-android:
+    needs: determine-platforms
+    if: needs.determine-platforms.outputs.build_android == 'true'
+    uses: ./.github/workflows/publish-bb-rs-android.yml
+    with:
+      tag_name: ${{ needs.determine-platforms.outputs.tag_name }}
+      ref_name: ${{ github.event.inputs.ref_name || github.sha }}
+    secrets: inherit
+
+  build-macos:
+    needs: determine-platforms
+    if: needs.determine-platforms.outputs.build_macos == 'true'
+    uses: ./.github/workflows/publish-bb-rs-macos.yml
+    with:
+      tag_name: ${{ needs.determine-platforms.outputs.tag_name }}
+      ref_name: ${{ github.event.inputs.ref_name || github.sha }}
+    secrets: inherit
+
+  build-linux:
+    needs: determine-platforms
+    if: needs.determine-platforms.outputs.build_linux == 'true'
+    uses: ./.github/workflows/publish-bb-rs-linux.yml
+    with:
+      tag_name: ${{ needs.determine-platforms.outputs.tag_name }}
+      ref_name: ${{ github.event.inputs.ref_name || github.sha }}
+    secrets: inherit
+
+  build-check:
+    name: Check builds are successful
+    needs: [determine-platforms, build-ios, build-android, build-macos, build-linux]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report overall success
+        env:
+          FAIL: ${{ contains(needs.*.result, 'failure') }}
+          CANCELLED: ${{ contains(needs.*.result, 'cancelled') }}
+        run: |
+          echo "Job results:"
+          echo "determine-platforms: ${{ needs.determine-platforms.result }}"
+          echo "build-ios: ${{ needs.build-ios.result }}"
+          echo "build-android: ${{ needs.build-android.result }}"
+          echo "build-macos: ${{ needs.build-macos.result }}"
+          echo "build-linux: ${{ needs.build-linux.result }}"
+
+          if [[ $FAIL == true ]]; then
+              echo "At least one job failed, release is unsuccessful."
+              exit 1
+          elif [[ $CANCELLED == true ]]; then
+              echo "At least one job was cancelled, release is unsuccessful."
+              exit 1
+          else
+              echo "All required jobs succeeded or were skipped as expected, proceeding with release."
+              exit 0
+          fi
+
+
+  release:
+    name: Publish All Artifacts
+    needs: [determine-platforms, build-check]
+    runs-on: ubuntu-latest
+    steps:
+      # Download all artifacts from all builds
+      - name: Download bb_rs artifact (aarch64-apple-ios)
+        if: needs.determine-platforms.outputs.build_ios == 'true'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: bb_rs-aarch64-apple-ios.tar.gz
+
+      - name: Download bb_rs artifact (aarch64-apple-ios-sim)
+        if: needs.determine-platforms.outputs.build_ios == 'true'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: bb_rs-aarch64-apple-ios-sim.tar.gz
+
+      - name: Download bb_rs artifact (x86_64-apple-ios)
+        if: needs.determine-platforms.outputs.build_ios == 'true'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: bb_rs-x86_64-apple-ios.tar.gz
+
+      - name: Download bb_rs artifact (aarch64-apple-darwin)
+        if: needs.determine-platforms.outputs.build_macos == 'true'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: bb_rs-aarch64-apple-darwin.tar.gz
+
+      - name: Download bb_rs artifact (x86_64-apple-darwin)
+        if: needs.determine-platforms.outputs.build_macos == 'true'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: bb_rs-x86_64-apple-darwin.tar.gz
+
+      - name: Download bb_rs artifact (x86_64-unknown-linux-gnu)
+        if: needs.determine-platforms.outputs.build_linux == 'true'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: bb_rs-x86_64-unknown-linux-gnu.tar.gz
+
+      - name: Download bb_rs artifact (aarch64-unknown-linux-gnu)
+        if: needs.determine-platforms.outputs.build_linux == 'true'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: bb_rs-aarch64-unknown-linux-gnu.tar.gz
+
+      - name: Download bb_rs artifact (x86_64-linux-android)
+        if: needs.determine-platforms.outputs.build_android == 'true'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: bb_rs-x86_64-linux-android.tar.gz
+
+      - name: Download bb_rs artifact (aarch64-linux-android)
+        if: needs.determine-platforms.outputs.build_android == 'true'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: bb_rs-aarch64-linux-android.tar.gz
+
+      - name: List available artifacts
+        run: |
+          echo "Available artifact files:"
+          ls -la *.tar.gz || echo "No .tar.gz files found"
+
+      - name: Publish to GitHub
+        uses: softprops/action-gh-release@v1
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.publish == 'true' }}
+        with:
+          tag_name: ${{ needs.determine-platforms.outputs.tag_name }}
+          prerelease: true
+          name: bb_rs binaries ${{ needs.determine-platforms.outputs.tag_name }}
+          body: |
+            Built platforms:
+            ${{ needs.determine-platforms.outputs.build_ios == 'true' && '- iOS (aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios)' || '' }}
+            ${{ needs.determine-platforms.outputs.build_android == 'true' && '- Android (x86_64-linux-android, aarch64-linux-android)' || '' }}
+            ${{ needs.determine-platforms.outputs.build_macos == 'true' && '- macOS (aarch64-apple-darwin, x86_64-apple-darwin)' || '' }}
+            ${{ needs.determine-platforms.outputs.build_linux == 'true' && '- Linux (x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu)' || '' }}
+          files: "*.tar.gz"
