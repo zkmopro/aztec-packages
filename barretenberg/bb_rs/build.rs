@@ -78,7 +78,6 @@ fn main() {
     // - Android: aarch64-linux-android, x86_64-linux-android
     // - macOS: aarch64-apple-darwin, x86_64-apple-darwin
     // - Linux: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu
-    // - WASM: wasm32-wasi, wasm32-wasip1-threads
     let dst;
     // iOS
     if target_os == "ios" {
@@ -187,44 +186,6 @@ fn main() {
             _ => panic!("Unsupported os and target_arch: {} {}", target_os, target_arch),
         }
     }
-    // WASM
-    else if target_os == "wasi" {
-        let wasi_sdk_prefix = env::var("WASI_SDK_PREFIX")
-            .unwrap_or_else(|_| "/opt/wasi-sdk".to_string());
-
-        let mut config = Config::new("../cpp");
-        config
-            .generator("Ninja")
-            .configure_arg("-DCMAKE_BUILD_TYPE=Release")
-            .configure_arg(&format!("--toolchain=../cpp/cmake/toolchains/wasm32-wasi.cmake"))
-            .configure_arg(&format!("-DCMAKE_SYSROOT={}/share/wasi-sysroot", wasi_sdk_prefix))
-            .configure_arg("-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER")
-            .configure_arg("-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY")
-            .configure_arg("-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY")
-            .configure_arg("-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY")
-            .configure_arg("-DCMAKE_C_COMPILER_WORKS=ON")
-            .configure_arg("-DCMAKE_CXX_COMPILER_WORKS=ON")
-            .configure_arg("-DDISABLE_AZTEC_VM=ON")
-            .configure_arg("-DTRACY_ENABLE=OFF")
-            .define("CMAKE_CXX_FLAGS", "-DBB_NO_EXCEPTIONS")
-            .env("WASI_SDK_PREFIX", &wasi_sdk_prefix)
-            .env("CC", format!("{}/bin/clang", wasi_sdk_prefix))
-            .env("CXX", format!("{}/bin/clang++", wasi_sdk_prefix))
-            .env("AR", format!("{}/bin/llvm-ar", wasi_sdk_prefix))
-            .env("RANLIB", format!("{}/bin/llvm-ranlib", wasi_sdk_prefix))
-            .build_target("bb");
-
-        // Check if multithreading is requested via target features
-        // wasm32-wasip1-threads enables multithreading
-        let target = env::var("TARGET").unwrap_or_default();
-        if target.contains("threads") {
-            config.configure_arg("-DMULTITHREADING=ON");
-        } else {
-            config.configure_arg("-DMULTITHREADING=OFF");
-        }
-
-        dst = config.build();
-    }
     // Other platforms
     else {
         panic!("Unsupported target: {}", target);
@@ -306,26 +267,6 @@ fn main() {
                 // Fix for macOS system type issues
                 "-D_LIBCPP_DISABLE_AVAILABILITY",
                 "--sysroot=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
-            ]);
-    } else if target_os == "wasi" {
-        let wasi_sdk_prefix = env::var("WASI_SDK_PREFIX")
-            .unwrap_or_else(|_| "/opt/wasi-sdk".to_string());
-
-        builder = builder
-            // Add the include path for headers.
-            .clang_args([
-                "-std=c++20",
-                "-xc++",
-                &format!("-I{}/build/include", dst.display()),
-                // Dependencies' include paths needs to be added manually.
-                &format!("-I{}/build/_deps/msgpack-c/src/msgpack-c/include", dst.display()),
-                // WASI sysroot includes
-                &format!("--sysroot={}/share/wasi-sysroot", wasi_sdk_prefix),
-                &format!("-I{}/share/wasi-sysroot/include/c++/v1", wasi_sdk_prefix),
-                &format!("-I{}/share/wasi-sysroot/include", wasi_sdk_prefix),
-                // WASM-specific flags
-                "-D_WASI_EMULATED_PROCESS_CLOCKS=1",
-                "-DBB_NO_EXCEPTIONS",
             ]);
     } else {
         // Default Linux (x86_64 and aarch64)
