@@ -49,8 +49,8 @@ jobs:
 
     - name: Set up Android Environment
       run: |
-        # Install Rust 1.89.0 for Android cross-compilation
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.89.0
+        # Install Rust stable for Android cross-compilation
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
         source $HOME/.cargo/env
         # Add cargo bin to PATH for subsequent steps
         echo "$HOME/.cargo/bin" >> $GITHUB_PATH
