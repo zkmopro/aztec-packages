@@ -2,9 +2,17 @@
 
 Rust bindings for Barretenberg C++ codebase.
 
+## Supported Platforms
+
+bb_rs supports the following platforms:
+- **iOS**: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios
+- **Android**: aarch64-linux-android, x86_64-linux-android
+- **macOS**: aarch64-apple-darwin, x86_64-apple-darwin
+- **Linux**: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu
+
 ## Build
 
-```
+```bash
 # Build on your own machine
 cargo build -vvvv
 

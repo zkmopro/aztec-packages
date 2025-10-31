@@ -20,6 +20,26 @@ add_compile_options(-Wno-missing-braces)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-fcolor-diagnostics -fconstexpr-steps=100000000)
 
+    # Handle the template keyword diagnostic for different Clang versions
+    # This is needed for C++20 code compatibility with older Clang versions
+    include(CheckCXXCompilerFlag)
+
+    # Check if the compiler supports the specific flag
+    # We need to be careful here as the Android NDK's Clang may not have this flag
+    CHECK_CXX_COMPILER_FLAG("-Wno-missing-template-arg-list-after-template-kw" HAS_TEMPLATE_WARNING_FLAG)
+
+    if(HAS_TEMPLATE_WARNING_FLAG)
+        # Modern Clang that supports this flag
+        add_compile_options(-Wno-missing-template-arg-list-after-template-kw)
+    else()
+        # For older Clang or Android NDK that doesn't support the flag
+        # Check for alternative flags that achieve similar results
+        CHECK_CXX_COMPILER_FLAG("-Wno-c++11-extensions" HAS_CXX11_EXTENSIONS_FLAG)
+        if(HAS_CXX11_EXTENSIONS_FLAG)
+            add_compile_options(-Wno-c++11-extensions)
+        endif()
+    endif()
+
     if(MEMORY_CHECKS)
         message(STATUS "Compiling with memory checks.")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
@@ -32,11 +52,18 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         add_compile_options(-Wno-missing-field-initializers)
         # CLI11.hpp
         add_compile_options(-Wno-deprecated-declarations)
+    else()
+        # For older Clang versions, also suppress VLA warnings to maintain compatibility
+        add_compile_options(-Wno-vla-extension)
     endif()
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     add_compile_options(-fconstexpr-ops-limit=100000000 -Wno-psabi)
+    # This gets in the way of partial object initialization (i.e. MyClass my_class{ .my_member = init_value })
+    add_compile_options(-Wno-missing-field-initializers)
+    # Suppress false positive stringop-overflow warnings in cross-compilation scenarios
+    add_compile_options(-Wno-stringop-overflow)
 endif()
 
 # We enable -O1 level optimsations, even when compiling debug wasm, otherwise we get "local count too large" at runtime.
