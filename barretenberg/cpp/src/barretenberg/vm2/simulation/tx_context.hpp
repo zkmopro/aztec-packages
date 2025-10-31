@@ -16,6 +16,16 @@ struct TxContext {
     Gas gas_used = { 0, 0 };
     SideEffectStates side_effect_states = { 0, 0 };
 
+    TxContext(HighLevelMerkleDBInterface& merkle_db,
+              WrittenPublicDataSlotsTreeCheckInterface& written_public_data_slots_tree,
+              RetrievedBytecodesTreeCheckInterface& retrieved_bytecodes_tree,
+              ContextProviderInterface& context_provider)
+        : merkle_db(merkle_db)
+        , written_public_data_slots_tree(written_public_data_slots_tree)
+        , retrieved_bytecodes_tree(retrieved_bytecodes_tree)
+        , context_provider(context_provider)
+    {}
+
     TxContextEvent serialize_tx_context_event() const
     {
         return {

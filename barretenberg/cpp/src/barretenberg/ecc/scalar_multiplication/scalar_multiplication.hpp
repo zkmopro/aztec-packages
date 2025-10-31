@@ -41,6 +41,16 @@ template <typename Curve> class MSM {
         std::span<const AffineElement> points;
         std::span<const uint32_t> scalar_indices;
         std::span<uint64_t> point_schedule;
+
+        MSMData(std::span<const ScalarField> scalars_,
+                std::span<const AffineElement> points_,
+                std::span<const uint32_t> scalar_indices_,
+                std::span<uint64_t> point_schedule_)
+            : scalars(scalars_)
+            , points(points_)
+            , scalar_indices(scalar_indices_)
+            , point_schedule(point_schedule_)
+        {}
     };
 
     /**

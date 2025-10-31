@@ -21,7 +21,7 @@ simulation::Instruction InstructionBuilder::build() const
     for (const auto& operand : operands) {
         operands_vec.push_back(operand.operand);
     }
-    return simulation::Instruction(opcode, indirect, std::move(operands_vec));
+    return simulation::Instruction{ .opcode = opcode, .indirect = indirect, .operands = std::move(operands_vec) };
 }
 
 } // namespace bb::avm2::testing

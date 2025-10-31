@@ -248,6 +248,16 @@ class ClientIVC {
         std::shared_ptr<RecursiveVKAndHash> honk_vk_and_hash;
         QUEUE_TYPE type;
         bool is_kernel = false;
+
+        StdlibVerifierInputs(StdlibProof proof_,
+                             std::shared_ptr<RecursiveVKAndHash> honk_vk_and_hash_,
+                             QUEUE_TYPE type_,
+                             bool is_kernel_)
+            : proof(std::move(proof_))
+            , honk_vk_and_hash(std::move(honk_vk_and_hash_))
+            , type(type_)
+            , is_kernel(is_kernel_)
+        {}
     };
     using StdlibVerificationQueue = std::deque<StdlibVerifierInputs>;
 
